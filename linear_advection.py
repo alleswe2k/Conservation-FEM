@@ -6,14 +6,32 @@ import numpy as np
 from petsc4py import PETSc
 from mpi4py import MPI
 
+import gmsh
+from dolfinx.io import gmshio
+
 from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc
 
-# Define mesh. TODO: Update to circular mesh
-nx, ny = 50, 50
-domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([-2, -2]), np.array([2, 2])],
-                               [nx, ny], mesh.CellType.triangle)
-# domain = mesh.create_unit_square(MPI.COMM_WORLD, [np.array([])])
+# Creating mesh
+gmsh.initialize()
+
+membrane = gmsh.model.occ.addDisk(0, 0, 0, 1, 1)
+gmsh.model.occ.synchronize()
+
+gdim = 2
+gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
+
+gmsh.option.setNumber("Mesh.CharacteristicLengthMin", 0.05)
+gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 0.05)
+gmsh.model.mesh.generate(gdim)
+
+gmsh_model_rank = 0
+mesh_comm = MPI.COMM_WORLD
+domain, cell_markers, facet_markers = gmshio.model_to_mesh(gmsh.model, mesh_comm, gmsh_model_rank, gdim=gdim)
+
+# nx, ny = 50, 50
+# domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([-2, -2]), np.array([2, 2])],
+#                                [nx, ny], mesh.CellType.triangle)
 V = fem.functionspace(domain, ("Lagrange", 1))
 # domain.geometry.dim = (2, )
 W = fem.functionspace(domain, ("Lagrange", 2, (domain.geometry.dim, )))
@@ -28,8 +46,8 @@ def velocity_field(x):
 
 # Define temporal parameters
 t = 0  # Start time
-T = 2.0  # Final time
-num_steps = 200 # For now, skip CFL part
+T = 8.0  # Final time
+num_steps = 800 # For now, skip CFL part
 dt = T / num_steps  # time step size
 
 u_n = fem.Function(V)
@@ -89,7 +107,7 @@ solver.getPC().setType(PETSc.PC.Type.LU)
 grid = pyvista.UnstructuredGrid(*plot.vtk_mesh(V))
 
 plotter = pyvista.Plotter()
-plotter.open_gif("u_time.gif", fps=10)
+plotter.open_gif("u_time.gif", fps=1)
 
 grid.point_data["uh"] = uh.x.array
 warped = grid.warp_by_scalar("uh", factor=1)
@@ -106,12 +124,6 @@ renderer = plotter.add_mesh(warped, show_edges=True, lighting=False,
 for i in range(num_steps):
     t += dt
     print(t)
-    # print("u_n.x.array.size:", u_n.x.array.size)
-    # print("uh.x.array.size:", uh.x.array.size)
-    # A.zeroEntries()
-    # assemble_matrix(A, bilinear_form, bcs=[bc])
-    # A.assemble()
-    # solver.setOperators(A)
 
     # Update the right hand side reusing the initial vector
     with b.localForm() as loc_b:
@@ -128,8 +140,6 @@ for i in range(num_steps):
     uh.x.scatter_forward()
 
     # Update solution at previous time step (u_n)
-    print(u_n.x.array.size)
-    print(uh.x.array.size)
     u_n.x.array[:] = uh.x.array
 
     # Write solution to file
