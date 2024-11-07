@@ -1,0 +1,2 @@
+conda activate fenicsx-env # new version
+conda activate fenicsproject # old version
