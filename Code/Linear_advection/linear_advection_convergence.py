@@ -12,28 +12,19 @@ from dolfinx.io import gmshio
 from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc
 
-# Creating mesh
-gmsh.initialize()
-
-membrane = gmsh.model.occ.addDisk(0, 0, 0, 1, 1)
-gmsh.model.occ.synchronize()
-
-gdim = 2
-gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
-
 L2_errors = []
 hmaxes = [1/4, 1/8, 1/16, 1/32] 
 for hmax in hmaxes:
     print(f'hmax: {hmax}')
-    if hmax != hmaxes[0]:
-        gmsh.finalize()
-        gmsh.initialize()
 
-        membrane = gmsh.model.occ.addDisk(0, 0, 0, 1, 1)
-        gmsh.model.occ.synchronize()
+    # Creating mesh
+    gmsh.initialize()
 
-        gdim = 2
-        gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
+    membrane = gmsh.model.occ.addDisk(0, 0, 0, 1, 1)
+    gmsh.model.occ.synchronize()
+
+    gdim = 2
+    gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
     gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
     gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
@@ -143,6 +134,8 @@ for hmax in hmaxes:
         print(f"L2-error: {error_L2:.2e}")
     
     L2_errors.append(float(error_L2))
+
+    gmsh.finalize()
 
 print(f'L2-errors:{L2_errors}')
 fitted_error = np.polyfit(np.log10(hmaxes), np.log10(L2_errors), 1)
