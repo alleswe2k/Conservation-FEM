@@ -44,6 +44,10 @@ u_n = fem.Function(V)
 u_n.name = "u_n"
 u_n.interpolate(initial_condition)
 
+u_old = fem.Function(V)
+u_old.name = "u_old"
+u_old.interpolate(initial_condition)
+
 w = fem.Function(W)
 w.name = "w"
 w.interpolate(velocity_field)
@@ -81,25 +85,22 @@ u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
 f = fem.Constant(domain, PETSc.ScalarType(0))
 
 # Artificial viscosity function based on element-wise residuals
-from dolfinx.fem import Constant
-
-def compute_artificial_viscosity(u_n, w, h):
+def compute_artificial_viscosity(u_n, u_old, w, h):
     # Compute residual R(Un) for each element
-    grad_u_n = ufl.grad(u_n)
-    div_flux = ufl.div(w * u_n)
-    residual = (u_n - uh) / dt + div_flux
+    residual = (u_n - u_old) / dt + ufl.dot(w, ufl.grad(u_n))
 
     # Compute wave speed beta_K per element
     beta_K = ufl.sqrt(ufl.dot(ufl.grad(w[0]), ufl.grad(w[0])) + ufl.dot(ufl.grad(w[1]), ufl.grad(w[1])))
+    # print(beta_K)
 
-    # Average solution value for normalization
-    volume = fem.assemble_scalar(fem.form(Constant(domain, PETSc.ScalarType(1)) * ufl.dx))  # Total volume of the domain
-    u_avg = fem.assemble_scalar(fem.form(uh * ufl.dx)) / volume
+    # # Average solution value for normalization
+    # volume = fem.assemble_scalar(fem.form(fem.Constant(domain, PETSc.ScalarType(1)) * ufl.dx))  # Total volume of the domain
+    # u_avg = fem.assemble_scalar(fem.form(u_n * ufl.dx)) / volume
 
     # Compute artificial viscosity using residual and wave speed
     viscosity = ufl.min_value(
         Cvel * h * beta_K,
-        CRV * h ** 2 * ufl.sqrt(ufl.inner(residual, residual)) / ufl.sqrt((uh - u_avg) ** 2)
+        CRV * h ** 2 * ufl.sqrt(ufl.inner(residual, residual))
     )
     return viscosity
 
@@ -122,13 +123,53 @@ if PLOT:
                                 cmap=viridis, scalar_bar_args=sargs,
                                 clim=[0, max(uh.x.array)])
 
+""" One GFEM step! """
+t += dt
+
+# Set up bilinear and linear forms
+a = u * v * ufl.dx + 0.5 * dt * ufl.dot(w, ufl.grad(u)) * v * ufl.dx
+L = u_n * v * ufl.dx - 0.5 * dt * ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx
+
+# Formulate the variational problem and linear algebra structures
+bilinear_form = fem.form(a)
+linear_form = fem.form(L)
+
+# Assemble matrix A (does not change over time)
+A = assemble_matrix(bilinear_form, bcs=[bc])
+A.assemble()
+b = create_vector(linear_form)
+
+# Solve linear system
+solver = PETSc.KSP().create(domain.comm)
+solver.setOperators(A)
+solver.setType(PETSc.KSP.Type.PREONLY)
+solver.getPC().setType(PETSc.PC.Type.LU)
+
+# Reassemble only b, as A remains the same
+with b.localForm() as loc_b:
+    loc_b.set(0)
+assemble_vector(b, linear_form)
+apply_lifting(b, [bilinear_form], [[bc]])
+b.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
+set_bc(b, [bc])
+
+# Solve the linear system
+solver.solve(b, uh.x.petsc_vec)
+uh.x.scatter_forward()
+
+# Update solution at previous time step (u_n)
+u_n.x.array[:] = uh.x.array
+
+# Write solution to file
+xdmf.write_function(uh, t)
 # Main time-stepping loop
-for i in range(num_steps):
+for i in range(num_steps-1):
     t += dt
 
     # Update artificial viscosity at each timestep
     h = fem.Constant(domain, PETSc.ScalarType(hmax))
-    epsilon = compute_artificial_viscosity(u_n, w, h)
+    epsilon = compute_artificial_viscosity(u_n, u_old, w, h)
+    u_old.x.array[:] = u_n.x.array
 
     # Set up bilinear and linear forms
     a = u * v * ufl.dx + 0.5 * dt * ufl.dot(w, ufl.grad(u)) * v * ufl.dx + epsilon * ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
