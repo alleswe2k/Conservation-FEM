@@ -22,25 +22,31 @@ gdim = 2
 gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
 L2_errors = []
-hmaxes = [1/4, 1/8, 1/16] # 0.05 in example
+hmaxes = [1/4, 1/8, 1/16, 1/32] 
 for hmax in hmaxes:
-    print(hmax)
+    print(f'hmax: {hmax}')
+    if hmax != hmaxes[0]:
+        gmsh.finalize()
+        gmsh.initialize()
+
+        membrane = gmsh.model.occ.addDisk(0, 0, 0, 1, 1)
+        gmsh.model.occ.synchronize()
+
+        gdim = 2
+        gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
+
     gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
     gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
     gmsh.model.mesh.generate(gdim)
+    gmsh.model.mesh.getElements()
 
     gmsh_model_rank = 0
     mesh_comm = MPI.COMM_WORLD
     domain, cell_markers, facet_markers = gmshio.model_to_mesh(gmsh.model, mesh_comm, gmsh_model_rank, gdim=gdim)
 
-    # nx, ny = 50, 50
-    # domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([-2, -2]), np.array([2, 2])],
-    #                                [nx, ny], mesh.CellType.triangle)
     V = fem.functionspace(domain, ("Lagrange", 1))
     # domain.geometry.dim = (2, )
     W = fem.functionspace(domain, ("Lagrange", 1, (domain.geometry.dim, ))) # Lagrange 2 in documentation
-    # w_cg1 = element("Lagrange", domain.topology.cell_name(), 2, shape=(domain.geometry.dim, 0))
-    # W = fem.functionspace(domain, w_cg1)
 
     def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
         return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
@@ -63,8 +69,6 @@ for hmax in hmaxes:
     w_values = w.x.array.reshape((-1, domain.geometry.dim))
     w_inf_norm = np.linalg.norm(w_values, ord=np.inf)
     # TODO: This is probably more correct
-    # w_norms = np.linalg.norm(w_values, axis=1)
-    # w_inf_norm = np.max(w_norms)
 
     # Define temporal parameters
     CFL = 0.5
@@ -80,10 +84,6 @@ for hmax in hmaxes:
     boundary_facets = mesh.locate_entities_boundary(
         domain, fdim, lambda x: np.full(x.shape[1], True, dtype=bool))
     bc = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
-
-    # Time-dependent output
-    # xdmf = io.XDMFFile(domain.comm, "linear_advection.xdmf", "w")
-    # xdmf.write_mesh(domain)
 
     # Define solution variable, and interpolate initial solution for visualization in Paraview
     uh = fem.Function(V)
@@ -137,21 +137,13 @@ for hmax in hmaxes:
         # Update solution at previous time step (u_n)
         u_n.x.array[:] = uh.x.array
 
-        # Write solution to file
-        # xdmf.write_function(uh, t)
-
-    # xdmf.close()
-
-    # V_ex = fem.functionspace(domain, ("Lagrange", 2)) # Might be more exact?
-    # u_ex = fem.Function(V_ex)
-    # u_ex.interpolate(initial_condition)
     # Compute L2 error and error at nodes
     error_L2 = np.sqrt(domain.comm.allreduce(fem.assemble_scalar(fem.form((uh - u_ex)**2 * ufl.dx)), op=MPI.SUM))
     if domain.comm.rank == 0:
         print(f"L2-error: {error_L2:.2e}")
     
-    L2_errors.append(error_L2)
+    L2_errors.append(float(error_L2))
 
-print(L2_errors)
+print(f'L2-errors:{L2_errors}')
 fitted_error = np.polyfit(np.log10(hmaxes), np.log10(L2_errors), 1)
-print(fitted_error)
+print(f'convergence: {fitted_error[0]}')
