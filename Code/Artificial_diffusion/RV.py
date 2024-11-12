@@ -1,4 +1,5 @@
 """ The working version! """
+""" TODO: Try assembling static part and adding dynamic part in loop """
 import matplotlib as mpl
 import pyvista
 import ufl
@@ -189,7 +190,7 @@ for i in range(num_steps-1):
 
         epsilon_k = min(Cvel * hk * Bk, CRV * hk **2 * Rk)
         for dof in loc2glb:
-            # TODO: Try = instead of +=
+            # += gives much more diffusion
             epsilon.x.array[dof] = epsilon_k
 
     a = u * v * ufl.dx + 0.5 * dt * ufl.dot(w, ufl.grad(u)) * v * ufl.dx + 0.5 * epsilon * dt * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
