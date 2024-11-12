@@ -1,4 +1,4 @@
-""" Cleanup test for test4.py """
+""" Cleanup test for matlab_way.py """
 import ufl
 import numpy as np
 from dolfinx import fem, mesh, io, plot
