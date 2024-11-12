@@ -256,69 +256,6 @@
           <DataItem Dimensions="1011 1" Format="HDF">RV.h5:/Function/uh/0_12309384304788483</DataItem>
         </Attribute>
       </Grid>
-      <Grid Name="uh" GridType="Uniform">
-        <xi:include xpointer="xpointer(/Xdmf/Domain/Grid[@GridType='Uniform'][1]/*[self::Topology or self::Geometry])" />
-        <Time Value="0.12661080999211011" />
-        <Attribute Name="uh" AttributeType="Scalar" Center="Node">
-          <DataItem Dimensions="1011 1" Format="HDF">RV.h5:/Function/uh/0_12661080999211011</DataItem>
-        </Attribute>
-      </Grid>
-      <Grid Name="uh" GridType="Uniform">
-        <xi:include xpointer="xpointer(/Xdmf/Domain/Grid[@GridType='Uniform'][1]/*[self::Topology or self::Geometry])" />
-        <Time Value="0.1301277769363354" />
-        <Attribute Name="uh" AttributeType="Scalar" Center="Node">
-          <DataItem Dimensions="1011 1" Format="HDF">RV.h5:/Function/uh/0_1301277769363354</DataItem>
-        </Attribute>
-      </Grid>
-      <Grid Name="uh" GridType="Uniform">
-        <xi:include xpointer="xpointer(/Xdmf/Domain/Grid[@GridType='Uniform'][1]/*[self::Topology or self::Geometry])" />
-        <Time Value="0.13364474388056069" />
-        <Attribute Name="uh" AttributeType="Scalar" Center="Node">
-          <DataItem Dimensions="1011 1" Format="HDF">RV.h5:/Function/uh/0_13364474388056069</DataItem>
-        </Attribute>
-      </Grid>
-      <Grid Name="uh" GridType="Uniform">
-        <xi:include xpointer="xpointer(/Xdmf/Domain/Grid[@GridType='Uniform'][1]/*[self::Topology or self::Geometry])" />
-        <Time Value="0.13716171082478598" />
-        <Attribute Name="uh" AttributeType="Scalar" Center="Node">
-          <DataItem Dimensions="1011 1" Format="HDF">RV.h5:/Function/uh/0_13716171082478598</DataItem>
-        </Attribute>
-      </Grid>
-      <Grid Name="uh" GridType="Uniform">
-        <xi:include xpointer="xpointer(/Xdmf/Domain/Grid[@GridType='Uniform'][1]/*[self::Topology or self::Geometry])" />
-        <Time Value="0.14067867776901127" />
-        <Attribute Name="uh" AttributeType="Scalar" Center="Node">
-          <DataItem Dimensions="1011 1" Format="HDF">RV.h5:/Function/uh/0_14067867776901127</DataItem>
-        </Attribute>
-      </Grid>
-      <Grid Name="uh" GridType="Uniform">
-        <xi:include xpointer="xpointer(/Xdmf/Domain/Grid[@GridType='Uniform'][1]/*[self::Topology or self::Geometry])" />
-        <Time Value="0.14419564471323656" />
-        <Attribute Name="uh" AttributeType="Scalar" Center="Node">
-          <DataItem Dimensions="1011 1" Format="HDF">RV.h5:/Function/uh/0_14419564471323656</DataItem>
-        </Attribute>
-      </Grid>
-      <Grid Name="uh" GridType="Uniform">
-        <xi:include xpointer="xpointer(/Xdmf/Domain/Grid[@GridType='Uniform'][1]/*[self::Topology or self::Geometry])" />
-        <Time Value="0.14771261165746186" />
-        <Attribute Name="uh" AttributeType="Scalar" Center="Node">
-          <DataItem Dimensions="1011 1" Format="HDF">RV.h5:/Function/uh/0_14771261165746186</DataItem>
-        </Attribute>
-      </Grid>
-      <Grid Name="uh" GridType="Uniform">
-        <xi:include xpointer="xpointer(/Xdmf/Domain/Grid[@GridType='Uniform'][1]/*[self::Topology or self::Geometry])" />
-        <Time Value="0.15122957860168715" />
-        <Attribute Name="uh" AttributeType="Scalar" Center="Node">
-          <DataItem Dimensions="1011 1" Format="HDF">RV.h5:/Function/uh/0_15122957860168715</DataItem>
-        </Attribute>
-      </Grid>
-      <Grid Name="uh" GridType="Uniform">
-        <xi:include xpointer="xpointer(/Xdmf/Domain/Grid[@GridType='Uniform'][1]/*[self::Topology or self::Geometry])" />
-        <Time Value="0.15474654554591244" />
-        <Attribute Name="uh" AttributeType="Scalar" Center="Node">
-          <DataItem Dimensions="1011 1" Format="HDF">RV.h5:/Function/uh/0_15474654554591244</DataItem>
-        </Attribute>
-      </Grid>
     </Grid>
   </Domain>
 </Xdmf>
