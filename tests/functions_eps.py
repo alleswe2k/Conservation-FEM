@@ -12,7 +12,6 @@ from dolfinx.io import gmshio
 from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc
 
-PLOT = True
 
 class PDE_solver:
     def __init__(self, hmax, T, initial_condition):
