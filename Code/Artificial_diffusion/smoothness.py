@@ -1,5 +1,4 @@
-""" The working version! """
-""" TODO: Try assembling static part and adding dynamic part in loop """
+""" TODO: residual and artificial viscosity plot """
 import matplotlib as mpl
 import pyvista
 import ufl
@@ -78,8 +77,7 @@ dt = CFL*hmax/w_inf_norm
 num_steps = int(np.ceil(T/dt))
 Cvel = 0.25
 CRV = 1.0
-
-# print("Infinity norm of the velocity field w:", w_inf_norm)
+Cm = 0.05
 
 # Create boundary condition
 fdim = domain.topology.dim - 1
@@ -162,6 +160,49 @@ L_h = h_DG * v * ufl.dx
 problem = LinearProblem(a_h, L_h, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
 h_CG = problem.solve() # returns dolfinx.fem.Function
 
+""" Creat patch dictionary """
+# Dictionary to store adjacent nodes for each node
+node_patches = {}
+
+# Loop over each cell to build node adjacency information
+for cell in range(domain.topology.index_map(domain.topology.dim).size_local):
+    cell_nodes = V.dofmap.cell_dofs(cell)
+    for node in cell_nodes:
+        if node not in node_patches:
+            node_patches[node] = set()
+        # Add all other nodes in this cell to the patch of the current node
+        # node_patches[node].update(n for n in cell_nodes if n != node)
+        node_patches[node].update(n for n in cell_nodes)
+
+
+# Iterate over each node and compute epsilon based on the patch
+# for node, adjacent_nodes in node_patches.items():
+#     print("Node:", node, " - Adjacent nodes:", adjacent_nodes)
+
+""" Assemble stiffness matrix, obtain element values """
+a = ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
+A = assemble_matrix(fem.form(a), bcs=[bc])
+A.assemble()
+
+i, j = 0, 1
+beta_ij = A.getValue(i, j)
+print(f"Entry ({i}, {j}) of the stiffness matrix is: {beta_ij}")
+
+for node, adjacent_nodes in node_patches.items():
+    # node = i and adjacent_nodes (including self) = j
+    print("Node:", node, " - Adjacent nodes:", adjacent_nodes)
+    for adj_node in adjacent_nodes:
+        print(adj_node)
+        print(A.getValue(node, adj_node))
+
+# Optional: Convert to dense matrix for small systems
+# A_dense = PETSc.Mat().createDense(size=A.getSize())
+# A_dense.setValuesCSR(*A.getValuesCSR())
+# A_dense.assemble()
+# A_dense_np = A_dense.getDenseArray()
+# print("Dense matrix representation:\n", A_dense_np)
+# print(A)
+
 """ Take on GFEM step for residual calculation """
 t += dt
 
@@ -199,13 +240,35 @@ for i in range(num_steps-1):
 
     epsilon = fem.Function(V)
 
-    for node in range(Rh.x.array.size):
+    # for node in range(Rh.x.array.size):
+    #     hi = h_CG.x.array[node]
+    #     Ri = Rh.x.array[node]
+    #     w_values = w.x.array.reshape((-1, domain.geometry.dim))
+    #     fi = w_values[node]
+    #     fi_norm = np.linalg.norm(fi)
+    #     epsilon.x.array[node] = min(Cvel * hi * fi_norm, CRV * hi ** 2 * np.abs(Ri))
+    for node, adjacent_nodes in node_patches.items():
+        # node = i and adjacent_nodes (including self) = j
+        # print("Node:", node, " - Adjacent nodes:", adjacent_nodes)
         hi = h_CG.x.array[node]
-        Ri = Rh.x.array[node]
         w_values = w.x.array.reshape((-1, domain.geometry.dim))
         fi = w_values[node]
         fi_norm = np.linalg.norm(fi)
-        epsilon.x.array[node] = min(Cvel * hi * fi_norm, CRV * hi ** 2 * np.abs(Ri))
+
+        numerator = 0
+        denominator = 0
+        for adj_node in adjacent_nodes:
+            # print(adj_node)
+            # print(A.getValue(node, adj_node))
+            beta = A.getValue(node, adj_node)
+            numerator += beta * (u_n.x.array[adj_node] - u_n.x.array[node])
+            denominator += np.abs(beta) * np.abs(u_n.x.array[adj_node] - u_n.x.array[node])
+        # if denominator == 0:
+        #     alpha = 0
+        # else:
+        alpha = np.abs(numerator) / max(denominator, 1e-8)
+        # print('Numerator:', np.abs(numerator), ' - Denominator:', denominator, ' - Alpha:', alpha)
+        epsilon.x.array[node] = alpha * Cm * hi * fi_norm
 
     a = u * v * ufl.dx + 0.5 * dt * ufl.dot(w, ufl.grad(u)) * v * ufl.dx + 0.5 * epsilon * dt * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
     L = u_n * v * ufl.dx - 0.5 * dt * ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx - 0.5 * epsilon * dt * ufl.dot(ufl.grad(u_n), ufl.grad(v)) * ufl.dx
