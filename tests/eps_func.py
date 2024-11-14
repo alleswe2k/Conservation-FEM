@@ -94,20 +94,9 @@ uh.name = "uh"
 uh.interpolate(initial_condition)
 # xdmf.write_function(uh, t)
 
-h = ufl.CellDiameter(domain)
-
 # Variational problem and solver
 u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
 f = fem.Constant(domain, PETSc.ScalarType(0))
-
-# Define time-discretized residual R
-R = (u - u_n) / dt + ufl.div(w * u) - ufl.div(ufl.grad(u))
-# Calculate L2 norm of residual for each cell
-R_norm = ufl.sqrt(ufl.dot(R, R))
-print("R norm:", R_norm)
-alpha = 0.01  # Tuning parameter for viscosity
-epsilon = alpha * h * R_norm
-print("Epsilon:", epsilon)
 
 a = u * v * ufl.dx + 0.5 * dt * ufl.dot(w, ufl.grad(u)) * v * ufl.dx
 L = u_n * v * ufl.dx - 0.5 * dt * ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx
@@ -172,7 +161,7 @@ u_n.x.array[:] = uh.x.array
 xdmf.write_function(uh, t)
 
 """ Then time loop """
-for i in range(num_steps):
+for i in range(num_steps-1):
     t += dt
 
     a_R = u * v * ufl.dx
