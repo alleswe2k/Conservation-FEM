@@ -19,7 +19,7 @@ gmsh.initialize()
 
 # membrane = gmsh.model.occ.add_rectangle(-2,2,0, -0.5, -0.5)
 # membrane = gmsh.model.occ.add_disk(0,0,0,1,1)
-membrane = gmsh.model.occ.addRectangle(-4,-4,0,8,8)
+membrane = gmsh.model.occ.addRectangle(-2,-2,0,4,4)
 # membrane = gmsh.model.occ.add_rectangle(-2,2, 0, 4, 4)
 gmsh.model.occ.synchronize()
 
@@ -114,7 +114,7 @@ for i in range(num_steps):
     # Solve linear problem
     n, converged = solver.solve(uh)
     assert (converged)
-    # uh.x.scatter_forward()
+    uh.x.scatter_forward()
 
     # Update solution at previous time step (u_n)
     u_n.x.array[:] = uh.x.array
