@@ -15,7 +15,7 @@ from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, LinearProblem
 
 L2_errors = []
-hmaxes = [1/4, 1/8, 1/16, 1/32]
+hmaxes = [1/4, 1/8, 1/16]
 for hmax in hmaxes:
     # Enable or disable real-time plotting
     PLOT = False
