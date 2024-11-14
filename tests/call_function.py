@@ -1,4 +1,4 @@
-from functions_eps_copy import PDE_solver
+from tests.PDE_solver import PDE_solver
 import numpy as np
 
 def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):

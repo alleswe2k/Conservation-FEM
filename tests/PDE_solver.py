@@ -60,6 +60,7 @@ class PDE_solver:
     
     def plot(self, uh, V):
         # TODO: Fixa denna
+        # Does not work properly
         pyvista.start_xvfb()
 
         # Extract topology from mesh and create pyvista mesh
