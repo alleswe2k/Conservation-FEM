@@ -1,3 +1,5 @@
+""" The working version! """
+""" TODO: Try assembling static part and adding dynamic part in loop """
 import matplotlib as mpl
 import pyvista
 import ufl
@@ -64,6 +66,9 @@ w.interpolate(velocity_field)
 
 w_values = w.x.array.reshape((-1, domain.geometry.dim))
 w_inf_norm = np.linalg.norm(w_values, ord=np.inf)
+# TODO: This is probably more correct
+# w_norms = np.linalg.norm(w_values, axis=1)
+# w_inf_norm = np.max(w_norms)
 
 # Define temporal parameters
 CFL = 0.5
@@ -73,6 +78,8 @@ dt = CFL*hmax/w_inf_norm
 num_steps = int(np.ceil(T/dt))
 Cvel = 0.25
 CRV = 1.0
+
+# print("Infinity norm of the velocity field w:", w_inf_norm)
 
 # Create boundary condition
 fdim = domain.topology.dim - 1
