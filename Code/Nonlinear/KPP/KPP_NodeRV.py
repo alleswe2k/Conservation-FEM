@@ -17,16 +17,13 @@ from dolfinx.nls.petsc import NewtonSolver
 PLOT = True
 gmsh.initialize()
 
-# membrane = gmsh.model.occ.add_rectangle(-2,2,0, -0.5, -0.5)
-# membrane = gmsh.model.occ.add_disk(0,0,0,1,1)
 membrane = gmsh.model.occ.addRectangle(-2,-2,0,4,4)
-# membrane = gmsh.model.occ.add_rectangle(-2,2, 0, 4, 4)
 gmsh.model.occ.synchronize()
 
 gdim = 2
 gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
-hmax = 1/10 # 0.05 in example
+hmax = 1/16 # 0.05 in example
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
 gmsh.model.mesh.generate(gdim)
@@ -98,7 +95,7 @@ F = ((uh-u_n)*v *ufl.dx +
 nonlin_problem = NonlinearProblem(F, uh, bcs = [bc])
 nonlin_solver = NewtonSolver(MPI.COMM_WORLD, nonlin_problem)
 nonlin_solver.max_it = 100  # Increase maximum number of iterations
-nonlin_solver.rtol = 1e-4
+nonlin_solver.rtol = 1e-1
 nonlin_solver.report = True
 if PLOT:
     # pyvista.start_xvfb()
@@ -173,7 +170,7 @@ for i in range(num_steps -1):
     Rh_problem = NewtonSolver(MPI.COMM_WORLD, R_problem)
     Rh_problem.convergence_criterion = "incremental"
     Rh_problem.max_it = 100  # Increase maximum number of iterations
-    Rh_problem.rtol = 1e-4
+    Rh_problem.rtol =  1e-1
     Rh_problem.report = True
 
     n, converged = Rh_problem.solve(RH)
@@ -200,7 +197,7 @@ for i in range(num_steps -1):
     problem = NonlinearProblem(F, uh, bcs = [bc])
     solver = NewtonSolver(MPI.COMM_WORLD, problem)
     solver.max_it = 100  # Increase maximum number of iterations
-    solver.rtol = 1e-4
+    solver.rtol =  1e-1
     solver.report = True
 
     # Solve linear problem

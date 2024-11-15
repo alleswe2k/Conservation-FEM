@@ -26,7 +26,7 @@ gmsh.model.occ.synchronize()
 gdim = 2
 gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
-hmax = 1/8 # 0.05 in example
+hmax = 1/16 # 0.05 in example
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
 gmsh.model.mesh.generate(gdim)
@@ -39,7 +39,7 @@ V = fem.functionspace(domain, ("Lagrange", 1))
 
 def initial_condition(x):
     # return np.where(x[0]**2 + x[1]**2 <= 1,  14 *np.pi / 4, np.pi / 4)
-    return (x[0]**2 + x[1]**2 <= 1) * 14*np.pi/4 + (x[0]**2 + x[1]**2 > 1) * np.pi/4
+    return (x[0]**2 + x[1]**2 <= 1) * 14*np.pi/4 + (x[0]**2 + x[1]**2 > 1) * 0
 def velocity_field(u):
     # Apply nonlinear operators correctly to the scalar function u
     return ufl.as_vector([ufl.cos(u), -ufl.sin(u)])
@@ -63,8 +63,8 @@ boundary_facets = mesh.locate_entities_boundary(
 bc = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
 # Time-dependent output
-xdmf = io.XDMFFile(domain.comm, "Code/Nonlinear/KPP/Output/KPP.xdmf", "w")
-xdmf.write_mesh(domain)
+# xdmf = io.XDMFFile(domain.comm, "Code/Nonlinear/KPP/Output/KPP.xdmf", "w")
+# xdmf.write_mesh(domain)
 
 # Define solution variable, and interpolate initial solution for visualization in Paraview
 uh = fem.Function(V)
@@ -116,7 +116,7 @@ for i in range(num_steps):
     u_n.x.array[:] = uh.x.array
 
     # Write solution to file
-    xdmf.write_function(uh, t)
+    # xdmf.write_function(uh, t)
     # Update plot
     if PLOT:
         new_warped = grid.warp_by_scalar("uh", factor=1)
@@ -126,4 +126,4 @@ for i in range(num_steps):
 
 if PLOT:
     plotter.close()
-xdmf.close()
+# xdmf.close()
