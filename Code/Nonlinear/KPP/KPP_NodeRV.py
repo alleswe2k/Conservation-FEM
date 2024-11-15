@@ -87,7 +87,8 @@ RH.interpolate(lambda x: np.full(x.shape[1], 0, dtype = np.float64))
 
 # Variational problem and solver
 u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
-F = ((uh-u_n)*v *ufl.dx + 
+F = (uh*v *ufl.dx -
+     u_n*v *ufl.dx + 
      0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
      0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
 
@@ -161,9 +162,9 @@ for i in range(num_steps -1):
     # F_R = (a_R - L_R)
 
 
-    F_R = (RH*v*ufl.dx - 1/dt*(u_n-u_old)*v *ufl.dx + 
-     0.5*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx + 
-     0.5*ufl.dot(velocity_field(u_old), ufl.grad(u_old))*v*ufl.dx)
+    F_R = (RH*v*ufl.dx - 1/dt*u_n*v *ufl.dx - 1/dt*u_old*v*ufl.dx +
+        0.5*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx + 
+        0.5*ufl.dot(velocity_field(u_old), ufl.grad(u_old))*v*ufl.dx)
     R_problem = NonlinearProblem(F_R, RH, bcs = [bc])
     # Rh = R_problem.solve()
 
@@ -188,7 +189,7 @@ for i in range(num_steps -1):
         fi_norm = np.linalg.norm(fi)
         epsilon.x.array[node] = min(Cvel * hi * fi_norm, CRV * hi ** 2 * np.abs(Ri))
     
-    F = ((uh-u_n)*v *ufl.dx + 
+    F = (uh*v *ufl.dx - u_n*v *ufl.dx + 
         0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
         0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx + 
         0.5*dt*epsilon*ufl.dot(ufl.grad(uh), ufl.grad(v))*ufl.dx +
