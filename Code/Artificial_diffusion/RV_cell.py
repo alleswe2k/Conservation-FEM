@@ -87,7 +87,7 @@ boundary_facets = mesh.locate_entities_boundary(
 bc = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
 # Time-dependent output
-xdmf = io.XDMFFile(domain.comm, "RV.xdmf", "w")
+xdmf = io.XDMFFile(domain.comm, "RV_cell.xdmf", "w")
 xdmf.write_mesh(domain)
 
 # Define solution variable, and interpolate initial solution for visualization in Paraview
@@ -126,7 +126,7 @@ if PLOT:
     grid = pyvista.UnstructuredGrid(*plot.vtk_mesh(V))
 
     plotter = pyvista.Plotter()
-    plotter.open_gif("RV.gif", fps=10)
+    plotter.open_gif("RV_cell.gif", fps=10)
 
     grid.point_data["uh"] = uh.x.array
     warped = grid.warp_by_scalar("uh", factor=1)
