@@ -36,12 +36,21 @@ V = fem.functionspace(domain, ("Lagrange", 1))
 DG0 = fem.functionspace(domain, ("DG", 0))
 DG1 = fem.functionspace(domain, ("DG", 1))
 
+
+# def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
+#     return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
+
+# def velocity_field(u):
+#     # Apply nonlinear operators correctly to the scalar function u
+#     return ufl.as_vector([u, u])
+
 def initial_condition(x):
-    # return np.where(x[0]**2 + x[1]**2 <= 1,  14 *np.pi / 4, np.pi / 4)
-    return (x[0]**2 + x[1]**2 <= 1) * 14*np.pi/4 + (x[0]**2 + x[1]**2 > 1) * 0
+    return (x[0]**2 + x[1]**2 <= 1) * 14*np.pi/4 + (x[0]**2 + x[1]**2 > 1) * np.pi/4
+
 def velocity_field(u):
     # Apply nonlinear operators correctly to the scalar function u
     return ufl.as_vector([ufl.cos(u), -ufl.sin(u)])
+
 
 def Res_condition(x):
     return PETSc.ScalarType(0)
@@ -70,7 +79,7 @@ CRV = 1.0
 fdim = domain.topology.dim - 1
 boundary_facets = mesh.locate_entities_boundary(
     domain, fdim, lambda x: np.full(x.shape[1], True, dtype=bool))
-bc = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
+bc = fem.dirichletbc(PETSc.ScalarType(np.pi/4), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
 # Time-dependent output
 xdmf = io.XDMFFile(domain.comm, "Code/Nonlinear/KPP/Output/testing.xdmf", "w")
@@ -82,12 +91,13 @@ uh.name = "uh"
 uh.interpolate(initial_condition)
 
 RH = fem.Function(V)
-RH.name = "uh"
+RH.name = "RH"
 RH.interpolate(lambda x: np.full(x.shape[1], 0, dtype = np.float64))
 
 # Variational problem and solver
 u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
-F = ((uh-u_n)*v *ufl.dx + 
+F = (uh*v *ufl.dx -
+     u_n*v *ufl.dx + 
      0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
      0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
 
@@ -161,9 +171,9 @@ for i in range(num_steps -1):
     # F_R = (a_R - L_R)
 
 
-    F_R = (RH*v*ufl.dx - 1/dt*(u_n-u_old)*v *ufl.dx + 
-     0.5*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx + 
-     0.5*ufl.dot(velocity_field(u_old), ufl.grad(u_old))*v*ufl.dx)
+    F_R = (RH*v*ufl.dx - 1/dt*u_n*v *ufl.dx - 1/dt*u_old*v*ufl.dx +
+        0.5*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx + 
+        0.5*ufl.dot(velocity_field(u_old), ufl.grad(u_old))*v*ufl.dx)
     R_problem = NonlinearProblem(F_R, RH, bcs = [bc])
     # Rh = R_problem.solve()
 
@@ -188,7 +198,7 @@ for i in range(num_steps -1):
         fi_norm = np.linalg.norm(fi)
         epsilon.x.array[node] = min(Cvel * hi * fi_norm, CRV * hi ** 2 * np.abs(Ri))
     
-    F = ((uh-u_n)*v *ufl.dx + 
+    F = (uh*v *ufl.dx - u_n*v *ufl.dx + 
         0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
         0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx + 
         0.5*dt*epsilon*ufl.dot(ufl.grad(uh), ufl.grad(v))*ufl.dx +
