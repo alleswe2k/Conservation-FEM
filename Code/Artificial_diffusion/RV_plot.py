@@ -1,44 +1,22 @@
-import os
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import pyvista as pv
 import ufl
 import numpy as np
 
 from petsc4py import PETSc
 from mpi4py import MPI
 
-import gmsh
-from dolfinx.io import gmshio
-
 from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, LinearProblem
 
-# Enable or disable real-time plotting
-PLOT = True
-# Creating mesh
-gmsh.initialize()
+from PDE_solver import PDE_solver
 
-membrane = gmsh.model.occ.addDisk(0, 0, 0, 1, 1)
-gmsh.model.occ.synchronize()
-
-gdim = 2
-gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
-
-hmax = 1/16 # 0.05 in example
-gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
-gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
-gmsh.model.mesh.generate(gdim)
-
-gmsh_model_rank = 0
-mesh_comm = MPI.COMM_WORLD
-domain, cell_markers, facet_markers = gmshio.model_to_mesh(gmsh.model, mesh_comm, gmsh_model_rank, gdim=gdim)
+hmax = 1/16
+pde_solve = PDE_solver()
+domain = pde_solve.create_mesh_unit_disk(hmax)
 
 V = fem.functionspace(domain, ("Lagrange", 1))
 W = fem.functionspace(domain, ("Lagrange", 1, (domain.geometry.dim, ))) # Lagrange 2 in documentation
 DG0 = fem.functionspace(domain, ("DG", 0))
 DG1 = fem.functionspace(domain, ("DG", 1))
-
 
 def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
     return (x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2
@@ -46,49 +24,24 @@ def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
 def velocity_field(x):
     return np.array([-2*np.pi*x[1], 2*np.pi*x[0]])
 
-u_n = fem.Function(V)
-u_n.name = "u_n"
-u_n.interpolate(initial_condition)
+u_n = pde_solve.create_vector(V, 'u_n', initial_condition)
+u_old = pde_solve.create_vector(V, 'u_old', initial_condition)
+u_ex = pde_solve.create_vector(V, 'u_ex', initial_condition)
+w = pde_solve.create_vector(W, 'w', velocity_field)
+uh = pde_solve.create_vector(V, 'uh', initial_condition)
 
-u_old = fem.Function(V)
-u_old.name = "u_old"
-u_old.interpolate(initial_condition)
-
-u_ex = fem.Function(V)
-u_ex.interpolate(initial_condition)
-
-# velocity field f_prim
-w = fem.Function(W)
-w.name = "w"
-w.interpolate(velocity_field)
-
-w_values = w.x.array.reshape((-1, domain.geometry.dim))
-w_inf_norm = np.linalg.norm(w_values, ord=np.inf)
-
-# Define temporal parameters
 CFL = 0.5
-t = 0  # Start time
-T = 1.0  # Final time
-dt = CFL*hmax/w_inf_norm
-num_steps = int(np.ceil(T/dt))
 Cvel = 0.25
 CRV = 1.0
+T = 1.0
+t = 0.0
 
-# Create boundary condition
-fdim = domain.topology.dim - 1
-boundary_facets = mesh.locate_entities_boundary(
-    domain, fdim, lambda x: np.full(x.shape[1], True, dtype=bool))
-bc = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
+dt, num_steps = pde_solve.get_time_steps(domain, w, CFL, T, hmax)
+bc = pde_solve.boundary_condition(domain, V)
 
 # Time-dependent output
 xdmf = io.XDMFFile(domain.comm, "RV_node.xdmf", "w")
 xdmf.write_mesh(domain)
-
-# Define solution variable, and interpolate initial solution for visualization in Paraview
-uh = fem.Function(V)
-uh.name = "uh"
-uh.interpolate(initial_condition)
-# xdmf.write_function(uh, t)
 
 # Variational problem and solver
 u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
@@ -106,40 +59,22 @@ A = assemble_matrix(bilinear_form, bcs=[bc])
 A.assemble()
 b = create_vector(linear_form)
 
-# Can no longer use LinearProblem to solve since we already
-# assembled a into matrix A. Therefore, create linear algebra solver with petsc4py
-solver = PETSc.KSP().create(domain.comm)
-solver.setOperators(A)
-solver.setType(PETSc.KSP.Type.PREONLY)
-solver.getPC().setType(PETSc.PC.Type.LU)
+solver = pde_solve.create_solver_linear(domain, A)
 
 """ First, project hk in DG(0) on h_h in Lagrange(1) """
 h_DG = fem.Function(DG1)
 num_cells = domain.topology.index_map(domain.topology.dim).size_local
 
 for cell in range(num_cells):
-    # TODO: DG instead of V?
     loc2glb = DG1.dofmap.cell_dofs(cell)
     x = DG1.tabulate_dof_coordinates()[loc2glb]
     edges = [np.linalg.norm(x[i] - x[j]) for i in range(3) for j in range(i+1, 3)]
     hk = min(edges) # NOTE: Max gives better convergence
     h_DG.x.array[loc2glb] = hk
 
-v = ufl.TestFunction(V)
-
 h_trial = ufl.TrialFunction(V)
 a_h = h_trial * v * ufl.dx
 L_h = h_DG * v * ufl.dx
-
-# Boundary coditions for RV
-u_bc = fem.Function(V)
-u_bc.interpolate(initial_condition)
-fdim = domain.topology.dim - 1
-boundary_facets = mesh.locate_entities_boundary(
-    domain, fdim, lambda x: np.full(x.shape[1], True, dtype=bool))
-dofs = fem.locate_dofs_topological(V, fdim, boundary_facets)
-bc_linear = [fem.dirichletbc(u_bc, dofs)]
-
 
 # Solve linear system
 problem = LinearProblem(a_h, L_h,petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
@@ -176,8 +111,7 @@ for i in range(num_steps-1):
     L_R = 1/dt * u_n * v * ufl.dx - 1/dt * u_old * v * ufl.dx + ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx
 
     # Solve linear system
-    # TODO: kolla om man ska enforca bc
-    problem = LinearProblem(a_R, L_R, bcs=bc_linear, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+    problem = LinearProblem(a_R, L_R, bcs=[bc], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
     Rh = problem.solve() # returns dolfinx.fem.Function
     Rh.x.array[:] = Rh.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
 
@@ -226,32 +160,7 @@ for i in range(num_steps-1):
 
     # Write solution to file
     xdmf.write_function(uh, t)
-
 xdmf.close()
 
-
-def plot_solution(domain, vector, file_name, title):
-    tdim = domain.topology.dim
-    os.environ["PYVISTA_OFF_SCREEN"] = "True"
-    pv.start_xvfb()
-    plotter = pv.Plotter(off_screen=True)
-
-    domain.topology.create_connectivity(tdim, tdim)
-    topology, cell_types, geometry = plot.vtk_mesh(domain, tdim)
-    grid = pv.UnstructuredGrid(topology, cell_types, geometry)
-    grid.point_data[title] = vector.x.array
-    warped = grid.warp_by_scalar(title, factor=1)
-
-    viridis = mpl.colormaps.get_cmap("viridis").resampled(25)
-
-    sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
-            position_x=0.1, position_y=0.8, width=0.8, height=0.1)
-
-    renderer = plotter.add_mesh(warped, show_edges=True, lighting=False,
-                            cmap=viridis, scalar_bar_args=sargs,
-                            clim=[0, max(uh.x.array)])
-
-    # Take a screenshot without calling show()
-    plotter.screenshot(f"Figures/{file_name}.png")  # Saves the plot as a PNG file
-
-plot_solution(domain, Rh, 'Rh_plot', 'Rh')
+pde_solve.plot_solution(domain, uh, 'Uh_plot', 'Uh')
+pde_solve.plot_solution(domain, Rh, 'Rh_plot', 'Rh')

@@ -11,7 +11,7 @@ from dolfinx.io import gmshio
 
 from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc
-from tests.PDE_solver import PDE_solver
+from PDE_solver import PDE_solver
 
 
 # Enable or disable real-time plotting
@@ -120,5 +120,3 @@ xdmf.close()
 error_L2 = np.sqrt(domain.comm.allreduce(fem.assemble_scalar(fem.form((uh - u_ex)**2 * ufl.dx)), op=MPI.SUM))
 if domain.comm.rank == 0:
     print(f"L2-error: {error_L2:.2e}")
-
-pde_solve.plot(uh, V)

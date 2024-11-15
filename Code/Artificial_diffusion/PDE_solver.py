@@ -21,6 +21,7 @@ class PDE_solver:
         self.initialized = False
 
     def create_mesh_unit_disk(self, hmax):
+        """ Creates a unit disk mesh given a hmax value """
         gdim = 2
         if self.initialized:
             gmsh.finalize()
@@ -40,12 +41,14 @@ class PDE_solver:
         return domain
     
     def create_vector(self, space, name, interpolation) -> fem.Function:
+        """ Creates a fem.Function vector given a space and interpolation """
         vec = fem.Function(space)
         vec.name = name
         vec.interpolate(interpolation)
         return vec
 
     def boundary_condition(self, domain, V) -> fem.dirichletbc:
+        """ Creates bc for the domain """
         fdim = domain.topology.dim - 1
         boundary_facets = mesh.locate_entities_boundary(
             domain, fdim, lambda x: np.full(x.shape[1], True, dtype=bool))
@@ -53,6 +56,7 @@ class PDE_solver:
         return bc
     
     def create_solver_linear(self, domain, A):
+        """ Creates a linear solver """
         solver = PETSc.KSP().create(domain.comm)
         solver.setOperators(A)
         solver.setType(PETSc.KSP.Type.PREONLY)
@@ -60,13 +64,29 @@ class PDE_solver:
         return solver
     
     def get_time_steps(self, domain, w, CFL, T, hmax):
+        """ Get dt and num_steps for a given hmax and CFL """
         w_values = w.x.array.reshape((-1, domain.geometry.dim))
         w_inf_norm = np.linalg.norm(w_values, ord=np.inf)
         dt = CFL * hmax / w_inf_norm
         num_steps = int(np.ceil(T/dt))
         return dt, num_steps
     
-    def plot_solution(domain, vector, file_name, title):
+    def get_patches(self, domain, V):
+        """ Get a dictionary of the patch of every node in the domain """
+        node_patches = {}
+        # Loop over each cell to build node adjacency information
+        for cell in range(domain.topology.index_map(domain.topology.dim).size_local):
+            cell_nodes = V.dofmap.cell_dofs(cell)
+            for node in cell_nodes:
+                if node not in node_patches:
+                    node_patches[node] = set()
+                # Add all other nodes in this cell to the patch of the current node
+                # node_patches[node].update(n for n in cell_nodes if n != node)
+                node_patches[node].update(n for n in cell_nodes)
+        return node_patches
+
+    def plot_solution(self, domain, vector, file_name, title):
+        """ Plots and saves the solution """
         tdim = domain.topology.dim
         os.environ["PYVISTA_OFF_SCREEN"] = "True"
         pv.start_xvfb()
