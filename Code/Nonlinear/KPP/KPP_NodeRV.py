@@ -26,7 +26,7 @@ gmsh.model.occ.synchronize()
 gdim = 2
 gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
-hmax = 1/8 # 0.05 in example
+hmax = 1/10 # 0.05 in example
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
 gmsh.model.mesh.generate(gdim)
@@ -41,10 +41,13 @@ DG1 = fem.functionspace(domain, ("DG", 1))
 
 def initial_condition(x):
     # return np.where(x[0]**2 + x[1]**2 <= 1,  14 *np.pi / 4, np.pi / 4)
-    return (x[0]**2 + x[1]**2 <= 1) * 14*np.pi/4 + (x[0]**2 + x[1]**2 > 1) * np.pi/4
+    return (x[0]**2 + x[1]**2 <= 1) * 14*np.pi/4 + (x[0]**2 + x[1]**2 > 1) * 0
 def velocity_field(u):
     # Apply nonlinear operators correctly to the scalar function u
     return ufl.as_vector([ufl.cos(u), -ufl.sin(u)])
+
+def Res_condition(x):
+    return PETSc.ScalarType(0)
 
 
 u_n = fem.Function(V)
@@ -80,7 +83,10 @@ xdmf.write_mesh(domain)
 uh = fem.Function(V)
 uh.name = "uh"
 uh.interpolate(initial_condition)
-print(uh.x.array)
+
+RH = fem.Function(V)
+RH.name = "uh"
+RH.interpolate(lambda x: np.full(x.shape[1], 0, dtype = np.float64))
 
 # Variational problem and solver
 u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
@@ -94,7 +100,6 @@ nonlin_solver = NewtonSolver(MPI.COMM_WORLD, nonlin_problem)
 nonlin_solver.max_it = 100  # Increase maximum number of iterations
 nonlin_solver.rtol = 1e-4
 nonlin_solver.report = True
-
 if PLOT:
     # pyvista.start_xvfb()
 
@@ -154,33 +159,43 @@ for i in range(num_steps -1):
     t += dt
 
     
-    a_R = u*v*ufl.dx
-    L_R = 1/dt*u_n * v * ufl.dx - 1/dt* u_old * v *ufl.dx + ufl.dot(velocity_field(u_n),ufl.grad(u_n))* v * ufl.dx
+    # a_R = u*v*ufl.dx
+    # L_R = 1/dt*u_n * v * ufl.dx - 1/dt* u_old * v *ufl.dx + ufl.dot(velocity_field(u_n),ufl.grad(u_n))* v * ufl.dx
+    # F_R = (a_R - L_R)
 
-    F_R = (a_R - L_R)
-    R_problem = NonlinearProblem(F_R, u_n, bcs = [bc])
+
+    F_R = (RH*v*ufl.dx - 1/dt*(u_n-u_old)*v *ufl.dx + 
+     0.5*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx + 
+     0.5*ufl.dot(velocity_field(u_old), ufl.grad(u_old))*v*ufl.dx)
+    R_problem = NonlinearProblem(F_R, RH, bcs = [bc])
     # Rh = R_problem.solve()
+
     Rh_problem = NewtonSolver(MPI.COMM_WORLD, R_problem)
-    Rh = Rh_problem.solve()     
+    Rh_problem.convergence_criterion = "incremental"
+    Rh_problem.max_it = 100  # Increase maximum number of iterations
+    Rh_problem.rtol = 1e-4
+    Rh_problem.report = True
+
+    n, converged = Rh_problem.solve(RH)
     # n, converged = Rh.solve(uh)
     # assert (converged)
-    Rh.x.array[:] = Rh.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
+    RH.x.array[:] = RH.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
     epsilon = fem.Function(V)
 
-    for node in range(Rh.x.array.size):
+    for node in range(RH.x.array.size):
         hi = h_CG.x.array[node]
-        Ri = Rh.x.array[node]
-        # w_values = w.x.array.reshape((-1, domain.geometry.dim))
-        # fi = w_values[node]
-        fi = velocity_field(u_n)
+        Ri = RH.x.array[node]
+        w = uh.x.array[node]
+        w = velocity_field(uh.x.array[node])
+        fi = np.array(w, dtype = 'float')
         fi_norm = np.linalg.norm(fi)
         epsilon.x.array[node] = min(Cvel * hi * fi_norm, CRV * hi ** 2 * np.abs(Ri))
-
+    
     F = ((uh-u_n)*v *ufl.dx + 
         0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
         0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx + 
-        0.5*dt*ufl.dot(ufl.grad(uh), ufl.grad(v))*ufl.dx -
-        0.5*dt*ufl.dot(ufl.grad(u_n), ufl.grad(v))*ufl.dx)
+        0.5*dt*epsilon*ufl.dot(ufl.grad(uh), ufl.grad(v))*ufl.dx +
+        0.5*dt*epsilon*ufl.dot(ufl.grad(u_n), ufl.grad(v))*ufl.dx)
     
     problem = NonlinearProblem(F, uh, bcs = [bc])
     solver = NewtonSolver(MPI.COMM_WORLD, problem)

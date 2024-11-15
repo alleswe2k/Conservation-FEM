@@ -75,13 +75,9 @@ print(uh.x.array)
 # Variational problem and solver
 u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
 F = ((uh-u_n)*v *ufl.dx + 
-     0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
-     0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
+     0.5*dt*ufl.dot(velocity_field(uh) + velocity_field(u_n), ufl.grad(uh))*v*ufl.dx)
+    #  0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
 
-# F = (uh * v * ufl.dx 
-#      + 0.5 * dt * ufl.dot(velocity_field(uh), ufl.grad(uh)) * v * ufl.dx 
-#      - u_n * v * ufl.dx 
-#      + 0.5 * dt * ufl.dot(velocity_field(u_n), ufl.grad(u_n)) * v * ufl.dx)
 problem = NonlinearProblem(F, uh, bcs = [bc])
 solver = NewtonSolver(MPI.COMM_WORLD, problem)
 solver.convergence_criterion = "incremental"
