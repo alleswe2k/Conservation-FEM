@@ -1,0 +1,34 @@
+Info    : Meshing 1D...
+Info    : Meshing curve 1 (Ellipse)
+Info    : Done meshing 1D (Wall 8.3599e-05s, CPU 3.2e-05s)
+Info    : Meshing 2D...
+Info    : Meshing surface 1 (Plane, Frontal-Delaunay)
+Info    : Done meshing 2D (Wall 0.00453505s, CPU 0.004535s)
+Info    : 85 nodes 169 elements
+L2-error: 2.05e-01
+Info    : Meshing 1D...
+Info    : Meshing curve 1 (Ellipse)
+Info    : Done meshing 1D (Wall 9.1504e-05s, CPU 9.2e-05s)
+Info    : Meshing 2D...
+Info    : Meshing surface 1 (Plane, Frontal-Delaunay)
+Info    : Done meshing 2D (Wall 0.0100083s, CPU 0.010007s)
+Info    : 280 nodes 559 elements
+L2-error: 1.41e-01
+Info    : Meshing 1D...
+Info    : Meshing curve 1 (Ellipse)
+Info    : Done meshing 1D (Wall 9.1905e-05s, CPU 3.7e-05s)
+Info    : Meshing 2D...
+Info    : Meshing surface 1 (Plane, Frontal-Delaunay)
+Info    : Done meshing 2D (Wall 0.029302s, CPU 0.029124s)
+Info    : 1011 nodes 2021 elements
+L2-error: 1.07e-01
+Info    : Meshing 1D...
+Info    : Meshing curve 1 (Ellipse)
+Info    : Done meshing 1D (Wall 0.000145567s, CPU 7.4e-05s)
+Info    : Meshing 2D...
+Info    : Meshing surface 1 (Plane, Frontal-Delaunay)
+Info    : Done meshing 2D (Wall 0.148712s, CPU 0.147847s)
+Info    : 3899 nodes 7797 elements
+L2-error: 8.53e-02
+L2-errors:[0.20456252089158114, 0.14132658791653474, 0.10712125542264571, 0.08527138202358948]
+convergence: 0.4187013034416166
