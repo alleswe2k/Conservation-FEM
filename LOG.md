@@ -11,5 +11,11 @@
 For all of the above, convergence rate is to be reported for mesh sizes 1/4, 1/8, 1/16 and 1/32. FEniCSx (the new version of FEniCS) is used.
 
 # Progression map
+## w. 46
+We've implemented residual viscosity, both cell based and nodal based. This was tested on the
+linear advection PDE. We've also implemented the KPP and Burger PDE, and stabilized both with nodal
+based RV. We've also implemented the smoothness indicator and tested convergence on the linear advection
+problem. Residual plots have been generated for RV and smoothness indicator.
+
 ## w. 45
 We set up a FEniCSx environment locally on our computers. We have also read the FEniCSx documentation available [here](https://jsdokken.com/dolfinx-tutorial/index.html). Then we implemented linear advection and calculated the convergence rate for mesh sizes 1/4, 1/8, 1/16. 1/32 was not included since FEniCSx couldn't resolve it in the convergence loop for unkown reasons. We have briefly started investigating how to implement artificial viscosity in FEniCSx.
