@@ -78,7 +78,7 @@ for hmax in hmaxes:
     num_steps = int(np.ceil(T/dt))
     Cvel = 0.25
     CRV = 1.0
-    Cm = 0.05
+    Cm = 0.5
 
     # Create boundary condition
     fdim = domain.topology.dim - 1
