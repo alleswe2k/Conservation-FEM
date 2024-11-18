@@ -1,5 +1,6 @@
+import os
 import matplotlib as mpl
-import pyvista
+import pyvista as pv
 import ufl
 import numpy as np
 from tqdm import tqdm
@@ -19,15 +20,15 @@ class PDE_solver:
     def __init__(self):
         self.initialized = False
 
-    def create_mesh(self, hmax):
+    def create_mesh_unit_disk(self, hmax):
         gdim = 2
         if self.initialized:
             gmsh.finalize()
         self.initialized = True
         gmsh.initialize()
-        self.membrane = gmsh.model.occ.addDisk(0, 0, 0, 1, 1)
+        membrane = gmsh.model.occ.addDisk(0, 0, 0, 1, 1)
         gmsh.model.occ.synchronize()
-        gmsh.model.addPhysicalGroup(gdim, [self.membrane], 1)
+        gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
         gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
@@ -38,7 +39,7 @@ class PDE_solver:
         domain, cell_markers, facet_markers = gmshio.model_to_mesh(gmsh.model, mesh_comm, gmsh_model_rank, gdim=gdim)
         return domain
     
-    def create_vector(self, name, space, interpolation) -> fem.Function:
+    def create_vector(self, space, name, interpolation) -> fem.Function:
         vec = fem.Function(space)
         vec.name = name
         vec.interpolate(interpolation)
@@ -58,22 +59,34 @@ class PDE_solver:
         solver.getPC().setType(PETSc.PC.Type.LU)
         return solver
     
-    def plot(self, uh, V):
-        # TODO: Fixa denna
-        # Does not work properly
-        pyvista.start_xvfb()
+    def get_time_steps(self, domain, w, CFL, T, hmax):
+        w_values = w.x.array.reshape((-1, domain.geometry.dim))
+        w_inf_norm = np.linalg.norm(w_values, ord=np.inf)
+        dt = CFL * hmax / w_inf_norm
+        num_steps = int(np.ceil(T/dt))
+        return dt, num_steps
+    
+    def plot_solution(domain, vector, file_name, title):
+        tdim = domain.topology.dim
+        os.environ["PYVISTA_OFF_SCREEN"] = "True"
+        pv.start_xvfb()
+        plotter = pv.Plotter(off_screen=True)
 
-        # Extract topology from mesh and create pyvista mesh
-        topology, cell_types, x = plot.vtk_mesh(V)
-        grid = pyvista.UnstructuredGrid(topology, cell_types, x)
+        domain.topology.create_connectivity(tdim, tdim)
+        topology, cell_types, geometry = plot.vtk_mesh(domain, tdim)
+        grid = pv.UnstructuredGrid(topology, cell_types, geometry)
+        grid.point_data[title] = vector.x.array
+        warped = grid.warp_by_scalar(title, factor=1)
 
-        # Set deflection values and add it to plotter
-        grid.point_data["u"] = uh.x.array
-        warped = grid.warp_by_scalar("u", factor=25)
+        # Chooses the colormap
+        viridis = mpl.colormaps.get_cmap("viridis").resampled(25)
 
-        plotter = pyvista.Plotter()
-        plotter.add_mesh(warped, show_edges=True, show_scalar_bar=True, scalars="u")
-        new_warped = grid.warp_by_scalar("uh", factor=1)
-        warped.points[:, :] = new_warped.points
-        warped.point_data["uh"][:] = uh.x.array
-        plotter.write_frame()
+        sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
+                position_x=0.1, position_y=0.8, width=0.8, height=0.1)
+
+        plotter.add_mesh(warped, show_edges=True, lighting=False,
+                                cmap=viridis, scalar_bar_args=sargs,
+                                clim=[0, max(vector.x.array)])
+
+        # Take a screenshot
+        plotter.screenshot(f"Figures/{file_name}.png")  # Saves the plot as a PNG file
