@@ -241,3 +241,8 @@ for hmax in hmaxes:
 print(f'L2-errors:{L2_errors}')
 fitted_error = np.polyfit(np.log10(hmaxes), np.log10(L2_errors), 1)
 print(f'convergence: {fitted_error[0]}')
+
+from PDE_solver import PDE_solver
+location = "Code/Artificial_diffusion/Figures"
+pde = PDE_solver()
+pde.plot_convergence(L2_errors, 'RV-Cell', 'rv_conv_cell', location)

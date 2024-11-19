@@ -4,6 +4,7 @@ import matplotlib as mpl
 import pyvista
 import ufl
 import numpy as np
+import matplotlib.pyplot as plt
 
 from petsc4py import PETSc
 from mpi4py import MPI
@@ -17,8 +18,6 @@ from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, a
 L2_errors = []
 hmaxes = [1/4, 1/8, 1/16, 1/32]
 for hmax in hmaxes:
-    # Enable or disable real-time plotting
-    PLOT = False
     # Creating mesh
     gmsh.initialize()
 
@@ -116,26 +115,6 @@ for hmax in hmaxes:
     solver.setOperators(A)
     solver.setType(PETSc.KSP.Type.PREONLY)
     solver.getPC().setType(PETSc.PC.Type.LU)
-
-    # Visualization of time dep. problem using pyvista
-    if PLOT:
-        # pyvista.start_xvfb()
-
-        grid = pyvista.UnstructuredGrid(*plot.vtk_mesh(V))
-
-        plotter = pyvista.Plotter()
-        plotter.open_gif("RV.gif", fps=10)
-
-        grid.point_data["uh"] = uh.x.array
-        warped = grid.warp_by_scalar("uh", factor=1)
-
-        viridis = mpl.colormaps.get_cmap("viridis").resampled(25)
-        sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
-                    position_x=0.1, position_y=0.8, width=0.8, height=0.1)
-
-        renderer = plotter.add_mesh(warped, show_edges=True, lighting=False,
-                                    cmap=viridis, scalar_bar_args=sargs,
-                                    clim=[0, max(uh.x.array)])
 
     """ First, project hk in DG(0) on h_h in Lagrange(1) """
     h_DG = fem.Function(DG1)
@@ -237,15 +216,6 @@ for hmax in hmaxes:
         # Update solution at previous time step (u_n)
         u_n.x.array[:] = uh.x.array
 
-        # Update plot
-        if PLOT:
-            new_warped = grid.warp_by_scalar("uh", factor=1)
-            warped.points[:, :] = new_warped.points
-            warped.point_data["uh"][:] = uh.x.array
-            plotter.write_frame()
-
-    if PLOT:
-        plotter.close()
     # Compute L2 error and error at nodes
     error_L2 = np.sqrt(domain.comm.allreduce(fem.assemble_scalar(fem.form((uh - u_ex)**2 * ufl.dx)), op=MPI.SUM))
     if domain.comm.rank == 0:
@@ -258,3 +228,12 @@ for hmax in hmaxes:
 print(f'L2-errors:{L2_errors}')
 fitted_error = np.polyfit(np.log10(hmaxes), np.log10(L2_errors), 1)
 print(f'convergence: {fitted_error[0]}')
+
+from PDE_solver import PDE_solver
+location = "Code/Artificial_diffusion/Figures"
+pde = PDE_solver()
+pde.plot_convergence(L2_errors, 'RV-Nodal', 'rv_conv', location)
+
+
+
+

@@ -1,6 +1,7 @@
 import os
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from matplotlib.ticker import ScalarFormatter
 import pyvista as pv
 import ufl
 import numpy as np
@@ -146,6 +147,33 @@ class PDE_solver:
         plotter.view_xy()
         # Take a screenshot
         plotter.screenshot(f"{location}/{filename}_{hmax}.png")  # Saves the plot as a PNG file
+
+
+    def plot_convergence(self, L2_errors, title, filename, location="Figures"):
+        x = np.array([4, 8, 16, 32])
+        fit = np.polyfit(np.log10(x), np.log10(L2_errors), 1)
+        y = 10**fit[1] * x**fit[0]
+
+        # Plot L2 errors and fitted line
+        plt.figure(figsize=(6, 4))
+        plt.loglog(x, L2_errors, '-^', label="L2 Errors")
+        plt.loglog(x, y, '--', label="Fitted Line")
+
+        # Add a denser grid
+        plt.grid(which='both', linestyle='--', linewidth=0.5)  # Apply grid to both major and minor ticks
+
+        # Add labels, legend, and title
+        plt.legend(fontsize=12)
+        plt.xlabel(r"$1/h$", fontsize=14)
+        plt.ylabel(r"$||e||$", fontsize=14)
+        plt.title(f'Convergence for {title}', fontsize=16)
+
+        # Save the plot
+        plt.savefig(f'{location}/{filename}.png')
+        plt.show()
+
+
+
 
 
 
