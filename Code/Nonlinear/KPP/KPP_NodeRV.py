@@ -72,7 +72,7 @@ T = 1.0  # Final time
 dt = 0.01
 num_steps = int(np.ceil(T/dt))
 Cvel = 0.25
-CRV = 1.0
+CRV = 4.0
 
 
 # Create boundary condition
@@ -82,7 +82,7 @@ boundary_facets = mesh.locate_entities_boundary(
 bc = fem.dirichletbc(PETSc.ScalarType(np.pi/4), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
 # Time-dependent output
-xdmf = io.XDMFFile(domain.comm, "Code/Nonlinear/KPP/Output/testing.xdmf", "w")
+xdmf = io.XDMFFile(domain.comm, "Nonlinear/KPP/Output/testing.xdmf", "w")
 xdmf.write_mesh(domain)
 
 # Define solution variable, and interpolate initial solution for visualization in Paraview

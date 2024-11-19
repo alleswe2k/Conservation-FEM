@@ -16,7 +16,7 @@ from PDE_solver import PDE_solver
 
 
 pde = PDE_solver()
-PLOT = False
+PLOT = True
 # gmsh.initialize()
 # mesh_comm = MPI.COMM_WORLD
 
@@ -47,7 +47,7 @@ def velocity_field(u):
     return ufl.as_vector([u,u])
 
 def exact_solution(x): 
-    t = 1
+    t = 0.5
 
     u = np.zeros_like(x[0])  # Initialize the solution array with zeros
     
@@ -57,7 +57,8 @@ def exact_solution(x):
     u = np.where(mask1 & (x[1] <= (1/2 + 3 * t / 20)), 0.5, u)
 
     # Second condition
-    mask2 = (1/2 - t / 4 <= x[0]) & (x[0] <= (1/2 + t / 2))
+    # mask2 = (1/2 - t / 4 <= x[0]) & (x[0] <= (1/2 + t / 2))
+    mask2 = ((1/2 - 3*t/5) <= x[0]) & (x[0] <= (1/2 - t/4))
     u = np.where(mask2 & (x[1] > (-8 * x[0] / 7 + 15 / 14 - 15 * t / 28)), -1, u)
     u = np.where(mask2 & (x[1] <= (-8 * x[0] / 7 + 15 / 14 - 15 * t / 28)), 0.5, u)
 
@@ -107,24 +108,47 @@ u_old.interpolate(initial_condition)
 
 
 
-CFL = 0.5
+# CFL = 0.5
+# t = 0  # Start time
+# T = 0.5 # Final time
+# dt = 0.01
+# num_steps = int(np.ceil(T/dt))
+# Cvel = 0.25
+# CRV = 1.0
+
+CFL = 0.2
 t = 0  # Start time
-T = 1  # Final time
+T = 0.5 # Final time
 dt = 0.01
 num_steps = int(np.ceil(T/dt))
 Cvel = 0.25
-CRV = 1.0
+CRV = 4.0
 
 
-# Create boundary condition
+u_exact_boundary = fem.Function(V)
+u_exact_boundary.interpolate(exact_solution)
+
+
+# # Create boundary condition
 fdim = domain.topology.dim - 1
 boundary_facets = mesh.locate_entities_boundary(
     domain, fdim, lambda x: np.full(x.shape[1], True, dtype=bool))
-bc = fem.dirichletbc(PETSc.ScalarType(np.pi/4), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
+# # bc = fem.dirichletbc(PETSc.ScalarType(np.pi/4), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
+# bc = fem.dirichletbc(u_exact_boundary, fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
-# # Time-dependent output
-# xdmf = io.XDMFFile(domain.comm, "Code/Nonlinear/KPP/Output/testing.xdmf", "w")
-# xdmf.write_mesh(domain)
+# Locate boundary degrees of freedom
+boundary_dofs = fem.locate_dofs_topological(V, fdim, boundary_facets)
+
+# Create a function to interpolate the exact solution
+u_exact_boundary = fem.Function(V)
+u_exact_boundary.interpolate(exact_solution)
+
+# Apply the interpolated exact solution on the boundary
+bc = fem.dirichletbc(u_exact_boundary, boundary_dofs)
+
+# Time-dependent output
+xdmf = io.XDMFFile(domain.comm, "Code/Nonlinear/Burgers_equation/Output/solution.xdmf", "w")
+xdmf.write_mesh(domain)
 
 # Define solution variable, and interpolate initial solution for visualization in Paraview
 uh = fem.Function(V)
@@ -154,7 +178,7 @@ if PLOT:
     grid = pyvista.UnstructuredGrid(*plot.vtk_mesh(V))
 
     plotter = pyvista.Plotter()
-    plotter.open_gif("Code/Nonlinear/KPP/Output/KPP.gif", fps=10)
+    plotter.open_gif("Code/Nonlinear/Burgers_equation/Output/burger.gif", fps=10)
 
     grid.point_data["uh"] = uh.x.array
     warped = grid.warp_by_scalar("uh", factor=1)
@@ -280,7 +304,7 @@ print(f'Error: {np.abs(u_exact.x.array - uh.x.array)}')
 
 if PLOT:
     plotter.close()
-# xdmf.close()
+xdmf.close()
 
 
   
