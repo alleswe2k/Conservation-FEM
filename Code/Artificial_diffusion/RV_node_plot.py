@@ -9,7 +9,9 @@ from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, a
 
 from PDE_solver import PDE_solver
 
-hmax = 1/16
+fraction = 32
+
+hmax = 1/fraction
 pde_solve = PDE_solver()
 domain = pde_solve.create_mesh_unit_disk(hmax)
 
@@ -38,10 +40,6 @@ t = 0.0
 
 dt, num_steps = pde_solve.get_time_steps(domain, w, CFL, T, hmax)
 bc = pde_solve.boundary_condition(domain, V)
-
-# Time-dependent output
-xdmf = io.XDMFFile(domain.comm, "RV_node.xdmf", "w")
-xdmf.write_mesh(domain)
 
 # Variational problem and solver
 u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
@@ -108,9 +106,6 @@ uh.x.scatter_forward()
 # Update solution at previous time step (u_n)
 u_n.x.array[:] = uh.x.array
 
-# Write solution to file
-xdmf.write_function(uh, t)
-
 # """ Then time loop """
 for i in range(num_steps-1):
     t += dt
@@ -166,9 +161,7 @@ for i in range(num_steps-1):
     # Update solution at previous time step (u_n)
     u_n.x.array[:] = uh.x.array
 
-    # Write solution to file
-    xdmf.write_function(uh, t)
-xdmf.close()
 
-pde_solve.plot_solution(domain, uh, 'Uh_plot', 'Uh')
-pde_solve.plot_solution(domain, Rh, 'Rh_plot', 'Rh')
+location = "Code/Artificial_diffusion/Figures"
+pde_solve.plot_2d(domain, fraction, epsilon, 'Espilon', 'epsilon_2d', location=location)
+pde_solve.plot_solution(domain, fraction, Rh, 'Rh', 'rv', location=location)
