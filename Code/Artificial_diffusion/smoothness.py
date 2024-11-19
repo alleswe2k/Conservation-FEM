@@ -14,8 +14,10 @@ from dolfinx.io import gmshio
 from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, LinearProblem
 
+# print(PETSc.ScalarType)
+
 # Enable or disable real-time plotting
-PLOT = False
+PLOT = True
 # Creating mesh
 gmsh.initialize()
 
@@ -77,7 +79,6 @@ T = 1.0  # Final time
 dt = CFL*hmax/w_inf_norm
 num_steps = int(np.ceil(T/dt))
 Cvel = 0.25
-CRV = 1.0
 Cm = 0.5
 
 # Create boundary condition
@@ -140,16 +141,23 @@ if PLOT:
                                 clim=[0, max(uh.x.array)])
 
 """ First, project hk in DG(0) on h_h in Lagrange(1) """
-h_DG = fem.Function(DG1)
+h_DG = fem.Function(DG0)  # Cell-based function for hk values
+
+cell_to_vertex_map = domain.topology.connectivity(domain.topology.dim, 0)
+vertex_coords = domain.geometry.x
+
 num_cells = domain.topology.index_map(domain.topology.dim).size_local
+hk_values = np.zeros(num_cells)
 
 for cell in range(num_cells):
-    # TODO: DG instead of V?
-    loc2glb = DG1.dofmap.cell_dofs(cell)
-    x = DG1.tabulate_dof_coordinates()[loc2glb]
-    edges = [np.linalg.norm(x[i] - x[j]) for i in range(3) for j in range(i+1, 3)]
-    hk = min(edges) # NOTE: Max gives better convergence
-    h_DG.x.array[loc2glb] = hk
+    # Get the vertices of the current cell
+    cell_vertices = cell_to_vertex_map.links(cell)
+    coords = vertex_coords[cell_vertices]  # Coordinates of the vertices
+    
+    edges = [np.linalg.norm(coords[i] - coords[j]) for i in range(len(coords)) for j in range(i + 1, len(coords))]
+    hk_values[cell] = min(edges) 
+
+h_DG.x.array[:] = hk_values
 
 v = ufl.TestFunction(V)
 
@@ -185,16 +193,16 @@ a = ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
 A = assemble_matrix(fem.form(a), bcs=[bc])
 A.assemble()
 
-i, j = 0, 1
-beta_ij = A.getValue(i, j)
-print(f"Entry ({i}, {j}) of the stiffness matrix is: {beta_ij}")
+# i, j = 0, 1
+# beta_ij = A.getValue(i, j)
+# print(f"Entry ({i}, {j}) of the stiffness matrix is: {beta_ij}")
 
-for node, adjacent_nodes in node_patches.items():
-    # node = i and adjacent_nodes (including self) = j
-    print("Node:", node, " - Adjacent nodes:", adjacent_nodes)
-    for adj_node in adjacent_nodes:
-        print(adj_node)
-        print(A.getValue(node, adj_node))
+# for node, adjacent_nodes in node_patches.items():
+#     # node = i and adjacent_nodes (including self) = j
+#     print("Node:", node, " - Adjacent nodes:", adjacent_nodes)
+#     for adj_node in adjacent_nodes:
+#         print(adj_node)
+#         print(A.getValue(node, adj_node))
 
 # Optional: Convert to dense matrix for small systems
 # A_dense = PETSc.Mat().createDense(size=A.getSize())
@@ -264,9 +272,7 @@ for i in range(num_steps-1):
             beta = A.getValue(node, adj_node)
             numerator += beta * (u_n.x.array[adj_node] - u_n.x.array[node])
             denominator += np.abs(beta) * np.abs(u_n.x.array[adj_node] - u_n.x.array[node])
-        # if denominator == 0:
-        #     alpha = 0
-        # else:
+
         # TODO: Check if 1e-8 is correct (do we have double precision aritchmetic)
         alpha = np.abs(numerator) / max(denominator, 1e-8)
         # print('Numerator:', np.abs(numerator), ' - Denominator:', denominator, ' - Alpha:', alpha)
@@ -349,4 +355,4 @@ def plot_solution(vector, file_name, title):
 
 # plot_solution(Rh, 'Rh_plot', 'Rh')
 # TODO: Fix scaling
-plot_solution(epsilon, 'epsilon_plot', 'epsilon')
+# plot_solution(epsilon, 'epsilon_plot', 'epsilon')

@@ -62,15 +62,23 @@ b = create_vector(linear_form)
 solver = pde_solve.create_solver_linear(domain, A)
 
 """ First, project hk in DG(0) on h_h in Lagrange(1) """
-h_DG = fem.Function(DG1)
+h_DG = fem.Function(DG0)  # Cell-based function for hk values
+
+cell_to_vertex_map = domain.topology.connectivity(domain.topology.dim, 0)
+vertex_coords = domain.geometry.x
+
 num_cells = domain.topology.index_map(domain.topology.dim).size_local
+hk_values = np.zeros(num_cells)
 
 for cell in range(num_cells):
-    loc2glb = DG1.dofmap.cell_dofs(cell)
-    x = DG1.tabulate_dof_coordinates()[loc2glb]
-    edges = [np.linalg.norm(x[i] - x[j]) for i in range(3) for j in range(i+1, 3)]
-    hk = min(edges) # NOTE: Max gives better convergence
-    h_DG.x.array[loc2glb] = hk
+    # Get the vertices of the current cell
+    cell_vertices = cell_to_vertex_map.links(cell)
+    coords = vertex_coords[cell_vertices]  # Coordinates of the vertices
+    
+    edges = [np.linalg.norm(coords[i] - coords[j]) for i in range(len(coords)) for j in range(i + 1, len(coords))]
+    hk_values[cell] = min(edges) 
+
+h_DG.x.array[:] = hk_values
 
 h_trial = ufl.TrialFunction(V)
 a_h = h_trial * v * ufl.dx
