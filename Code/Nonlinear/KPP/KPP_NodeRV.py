@@ -82,7 +82,7 @@ boundary_facets = mesh.locate_entities_boundary(
 bc = fem.dirichletbc(PETSc.ScalarType(np.pi/4), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
 # Time-dependent output
-xdmf = io.XDMFFile(domain.comm, "Nonlinear/KPP/Output/testing.xdmf", "w")
+xdmf = io.XDMFFile(domain.comm, "Code/Nonlinear/KPP/Output/testing.xdmf", "w")
 xdmf.write_mesh(domain)
 
 # Define solution variable, and interpolate initial solution for visualization in Paraview
@@ -127,16 +127,23 @@ if PLOT:
                                 clim=[0, max(uh.x.array)])
     
 
-h_DG = fem.Function(DG1)
+h_DG = fem.Function(DG0)  # Cell-based function for hk values
+
+cell_to_vertex_map = domain.topology.connectivity(domain.topology.dim, 0)
+vertex_coords = domain.geometry.x
+
 num_cells = domain.topology.index_map(domain.topology.dim).size_local
+hk_values = np.zeros(num_cells)
 
 for cell in range(num_cells):
-    # TODO: DG instead of V?
-    loc2glb = DG1.dofmap.cell_dofs(cell)
-    x = DG1.tabulate_dof_coordinates()[loc2glb]
-    edges = [np.linalg.norm(x[i] - x[j]) for i in range(3) for j in range(i+1, 3)]
-    hk = min(edges) # NOTE: Max gives better convergence
-    h_DG.x.array[loc2glb] = hk
+    # Get the vertices of the current cell
+    cell_vertices = cell_to_vertex_map.links(cell)
+    coords = vertex_coords[cell_vertices]  # Coordinates of the vertices
+    
+    edges = [np.linalg.norm(coords[i] - coords[j]) for i in range(len(coords)) for j in range(i + 1, len(coords))]
+    hk_values[cell] = min(edges) 
+
+h_DG.x.array[:] = hk_values
 
 
 
@@ -171,8 +178,8 @@ for i in range(num_steps -1):
     # F_R = (a_R - L_R)
 
 
-    F_R = (RH*v*ufl.dx - 1/dt*u_n*v *ufl.dx - 1/dt*u_old*v*ufl.dx +
-        0.5*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx + 
+    F_R = (RH*v*ufl.dx - 1/dt*u_n*v *ufl.dx + 1/dt*u_old*v*ufl.dx -
+        0.5*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx -
         0.5*ufl.dot(velocity_field(u_old), ufl.grad(u_old))*v*ufl.dx)
     R_problem = NonlinearProblem(F_R, RH, bcs = [bc])
     # Rh = R_problem.solve()
