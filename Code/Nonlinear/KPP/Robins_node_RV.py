@@ -13,7 +13,7 @@ from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, LinearProblem
 
 # Enable or disable real-time plotting
-PLOT = True
+PLOT = False
 # Creating mesh
 gmsh.initialize()
 
@@ -60,9 +60,27 @@ u_ex.interpolate(initial_condition)
 # velocity field f_prim
 w = fem.Function(W)
 w.name = "w"
+
+coords = domain.geometry.x
+# print(coords[:5])
+# print("--------")
+print(velocity_field(coords[:5]))
 w.interpolate(velocity_field)
+# print("--------")
+
+# print(w.x.array[:5])
+# print(velocity_field([0,0]))
+# print(w.x.array)
+# for i in range(5):
+#     exact = velocity_field(coords[i])
+#     interpolated = w.x.array.reshape((-1, domain.geometry.dim))[i]
+#     print(f"Point {coords[i]}:")
+#     print(f"  Exact velocity: {exact}")
+#     print(f"  Interpolated velocity: {interpolated}")
+
 
 w_values = w.x.array.reshape((-1, domain.geometry.dim))
+
 w_inf_norm = np.linalg.norm(w_values, ord=np.inf)
 
 # Define temporal parameters
