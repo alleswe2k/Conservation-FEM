@@ -14,10 +14,13 @@ from dolfinx.io import gmshio
 from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, LinearProblem
 
+from PDE_solver import PDE_solver
+
+pde_solve = PDE_solver()
 # print(PETSc.ScalarType)
 
 # Enable or disable real-time plotting
-PLOT = True
+PLOT = False
 # Creating mesh
 gmsh.initialize()
 
@@ -27,7 +30,8 @@ gmsh.model.occ.synchronize()
 gdim = 2
 gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
-hmax = 1/16 # 0.05 in example
+fraction = 8
+hmax = 1/fraction # 0.05 in example
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
 gmsh.model.mesh.generate(gdim)
@@ -183,34 +187,10 @@ for cell in range(domain.topology.index_map(domain.topology.dim).size_local):
         # node_patches[node].update(n for n in cell_nodes if n != node)
         node_patches[node].update(n for n in cell_nodes)
 
-
-# Iterate over each node and compute epsilon based on the patch
-# for node, adjacent_nodes in node_patches.items():
-#     print("Node:", node, " - Adjacent nodes:", adjacent_nodes)
-
 """ Assemble stiffness matrix, obtain element values """
 a = ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
 A = assemble_matrix(fem.form(a), bcs=[bc])
 A.assemble()
-
-# i, j = 0, 1
-# beta_ij = A.getValue(i, j)
-# print(f"Entry ({i}, {j}) of the stiffness matrix is: {beta_ij}")
-
-# for node, adjacent_nodes in node_patches.items():
-#     # node = i and adjacent_nodes (including self) = j
-#     print("Node:", node, " - Adjacent nodes:", adjacent_nodes)
-#     for adj_node in adjacent_nodes:
-#         print(adj_node)
-#         print(A.getValue(node, adj_node))
-
-# Optional: Convert to dense matrix for small systems
-# A_dense = PETSc.Mat().createDense(size=A.getSize())
-# A_dense.setValuesCSR(*A.getValuesCSR())
-# A_dense.assemble()
-# A_dense_np = A_dense.getDenseArray()
-# print("Dense matrix representation:\n", A_dense_np)
-# print(A)
 
 """ Take on GFEM step for residual calculation """
 t += dt
@@ -249,13 +229,6 @@ for i in range(num_steps-1):
 
     epsilon = fem.Function(V)
 
-    # for node in range(Rh.x.array.size):
-    #     hi = h_CG.x.array[node]
-    #     Ri = Rh.x.array[node]
-    #     w_values = w.x.array.reshape((-1, domain.geometry.dim))
-    #     fi = w_values[node]
-    #     fi_norm = np.linalg.norm(fi)
-    #     epsilon.x.array[node] = min(Cvel * hi * fi_norm, CRV * hi ** 2 * np.abs(Ri))
     for node, adjacent_nodes in node_patches.items():
         # node = i and adjacent_nodes (including self) = j
         # print("Node:", node, " - Adjacent nodes:", adjacent_nodes)
@@ -273,7 +246,6 @@ for i in range(num_steps-1):
             numerator += beta * (u_n.x.array[adj_node] - u_n.x.array[node])
             denominator += np.abs(beta) * np.abs(u_n.x.array[adj_node] - u_n.x.array[node])
 
-        # TODO: Check if 1e-8 is correct (do we have double precision aritchmetic)
         alpha = np.abs(numerator) / max(denominator, 1e-8)
         # print('Numerator:', np.abs(numerator), ' - Denominator:', denominator, ' - Alpha:', alpha)
         epsilon.x.array[node] = alpha * Cm * hi * fi_norm
@@ -328,31 +300,6 @@ error_L2 = np.sqrt(domain.comm.allreduce(fem.assemble_scalar(fem.form((uh - u_ex
 if domain.comm.rank == 0:
     print(f"L2-error: {error_L2:.2e}")
 
-def plot_solution(vector, file_name, title):
-    tdim = domain.topology.dim
-    os.environ["PYVISTA_OFF_SCREEN"] = "True"
-    pyvista.start_xvfb()
-    plotter = pyvista.Plotter(off_screen=True)
-
-    domain.topology.create_connectivity(tdim, tdim)
-    topology, cell_types, geometry = plot.vtk_mesh(domain, tdim)
-    grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
-    grid.point_data[title] = vector.x.array
-    warped = grid.warp_by_scalar(title, factor=1)
-
-    viridis = mpl.colormaps.get_cmap("viridis").resampled(25)
-
-    sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
-            position_x=0.1, position_y=0.8, width=0.8, height=0.1)
-
-    renderer = plotter.add_mesh(warped, show_edges=True, lighting=False,
-                            cmap=viridis, scalar_bar_args=sargs,
-                            clim=[0, max(uh.x.array)])
-
-    # Take a screenshot without calling show()
-    plotter.screenshot(f"{file_name}.png")  # Saves the plot as a PNG file
-    print("Done_plotting")
-
-# plot_solution(Rh, 'Rh_plot', 'Rh')
-# TODO: Fix scaling
-# plot_solution(epsilon, 'epsilon_plot', 'epsilon')
+location = "./Figures/linear_advection/SI"
+pde_solve.plot_2d(domain, fraction, epsilon, 'Espilon', 'epsilon_2d', location=location)
+pde_solve.plot_solution(domain, fraction, Rh, 'Rh', 'rv', location=location)
