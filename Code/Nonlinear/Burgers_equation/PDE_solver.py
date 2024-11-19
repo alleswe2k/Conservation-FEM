@@ -1,9 +1,9 @@
 import os
 import matplotlib as mpl
+import matplotlib.pyplot as plt
 import pyvista as pv
 import ufl
 import numpy as np
-from tqdm import tqdm
 
 from petsc4py import PETSc
 from mpi4py import MPI
@@ -85,28 +85,68 @@ class PDE_solver:
                 node_patches[node].update(n for n in cell_nodes)
         return node_patches
 
-    def plot_solution(self, domain, vector, file_name, title):
-        """ Plots and saves the solution """
+    def __setup_plot(self, domain):
         tdim = domain.topology.dim
         os.environ["PYVISTA_OFF_SCREEN"] = "True"
         pv.start_xvfb()
         plotter = pv.Plotter(off_screen=True)
-
         domain.topology.create_connectivity(tdim, tdim)
         topology, cell_types, geometry = plot.vtk_mesh(domain, tdim)
         grid = pv.UnstructuredGrid(topology, cell_types, geometry)
+
+        return plotter, grid
+
+    def plot_solution(self, domain, hmax, vector, title, filename, location="Figures"):
+        """ Plots and saves the solution """
+        pv.global_theme.colorbar_orientation = 'horizontal'
+        plotter, grid = self.__setup_plot(domain)
+        grid.point_data[title] = vector.x.array
+        warped = grid.warp_by_scalar(title, factor=1)
+        # Chooses the colormap
+        viridis = mpl.colormaps.get_cmap("viridis").resampled(25)
+        sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
+                position_x=0.1, position_y=0.8, width=0.8, height=0.1)
+        plotter.add_mesh(warped, show_edges=True, lighting=False,
+                                cmap=viridis, scalar_bar_args=sargs,
+                                clim=[0, max(vector.x.array)])
+
+        # Take a screenshot
+        plotter.screenshot(f"{location}/{filename}_{hmax}.png")  # Saves the plot as a PNG file
+    
+
+    def plot_2d(self, domain, hmax, vector, title, filename, location="Figures"):
+
+        pv.global_theme.colorbar_orientation = 'vertical'
+        plotter, grid = self.__setup_plot(domain)       
         grid.point_data[title] = vector.x.array
         warped = grid.warp_by_scalar(title, factor=1)
 
         # Chooses the colormap
         viridis = mpl.colormaps.get_cmap("viridis").resampled(25)
 
-        sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
-                position_x=0.1, position_y=0.8, width=0.8, height=0.1)
+        sargs = {
+            "title": title,
+            "title_font_size": 20,
+            "label_font_size": 15,
+            "fmt": "%.2e",
+            "color": "black",
+            "position_x": 0.85,  # Position to the far right of the plot
+            "position_y": 0.25,  # Center vertically
+            "width": 0.08,  # Narrow width
+            "height": 0.6  # Height proportional to the plot
+        }
 
-        plotter.add_mesh(warped, show_edges=True, lighting=False,
-                                cmap=viridis, scalar_bar_args=sargs,
-                                clim=[0, max(vector.x.array)])
-
+        plotter.add_mesh(
+            warped,
+            show_edges=False, 
+            lighting=False,
+            cmap=viridis,
+            scalar_bar_args=sargs,
+            clim=[0, max(vector.x.array)])
+        plotter.view_xy()
         # Take a screenshot
-        plotter.screenshot(f"Figures/{file_name}.png")  # Saves the plot as a PNG file
+        plotter.screenshot(f"{location}/{filename}_{hmax}.png")  # Saves the plot as a PNG file
+
+
+
+
