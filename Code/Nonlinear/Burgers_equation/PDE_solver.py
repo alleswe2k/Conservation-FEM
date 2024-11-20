@@ -142,7 +142,7 @@ class PDE_solver:
             lighting=False,
             cmap=viridis,
             scalar_bar_args=sargs,
-            clim=[0, max(vector.x.array)])
+            clim=[min(vector.x.array), max(vector.x.array)])
         plotter.view_xy()
         # Take a screenshot
         plotter.screenshot(f"{location}/{filename}_{hmax}.png")  # Saves the plot as a PNG file

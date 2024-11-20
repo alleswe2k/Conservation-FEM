@@ -16,14 +16,12 @@ from PDE_solver import PDE_solver
 
 
 pde = PDE_solver()
-PLOT = True
+PLOT = False
 
 domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [100, 100], cell_type=mesh.CellType.triangle)
 
 V = fem.functionspace(domain, ("Lagrange", 1))
 DG0 = fem.functionspace(domain, ("DG", 0))
-DG1 = fem.functionspace(domain, ("DG", 1))
-
 
 def velocity_field(u):
     # Apply nonlinear operators correctly to the scalar function u
@@ -128,6 +126,7 @@ u_exact_boundary.interpolate(exact_solution)
 
 # Apply the interpolated exact solution on the boundary
 bc = fem.dirichletbc(u_exact_boundary, boundary_dofs)
+bc0 = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
 # Time-dependent output
 xdmf = io.XDMFFile(domain.comm, "Code/Nonlinear/Burgers_equation/Output/solution.xdmf", "w")
@@ -148,7 +147,7 @@ F = (uh*v *ufl.dx -
      u_n*v *ufl.dx + 
      0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
      0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
-
+pde.plot_2d(domain, 100, u_n, 'u_n', 'init_2d', location='./Figures')
 
 nonlin_problem = NonlinearProblem(F, uh, bcs = [bc])
 nonlin_solver = NewtonSolver(MPI.COMM_WORLD, nonlin_problem)
@@ -224,11 +223,12 @@ for i in range(num_steps -1):
     # L_R = 1/dt*u_n * v * ufl.dx - 1/dt* u_old * v *ufl.dx + ufl.dot(velocity_field(u_n),ufl.grad(u_n))* v * ufl.dx
     # F_R = (a_R - L_R)
 
-    F_R = (RH*v*ufl.dx - 1/dt*u_n*v *ufl.dx + 1/dt*u_old*v*ufl.dx -
-        0.5*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx -
-        0.5*ufl.dot(velocity_field(u_old), ufl.grad(u_old))*v*ufl.dx)
-    # F_R = (RH*v*ufl.dx - 1/dt*u_n*v *ufl.dx + 1/dt*u_old*v*ufl.dx - ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
-    R_problem = NonlinearProblem(F_R, RH, bcs = [bc])
+
+    # F_R = (RH*v*ufl.dx - 1/dt*u_n*v *ufl.dx + 1/dt*u_old*v*ufl.dx -
+    #     0.5*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx - 
+    #     0.5*ufl.dot(velocity_field(u_old), ufl.grad(u_old))*v*ufl.dx)
+    F_R = (RH*v*ufl.dx - 1/dt*u_n*v *ufl.dx + 1/dt*u_old*v*ufl.dx - ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
+    R_problem = NonlinearProblem(F_R, RH, bcs=[bc0])
     # Rh = R_problem.solve()
 
     Rh_problem = NewtonSolver(MPI.COMM_WORLD, R_problem)
@@ -282,11 +282,18 @@ for i in range(num_steps -1):
         warped.point_data["uh"][:] = uh.x.array
         plotter.write_frame()
 
-pde.plot_solution(domain, u_exact, "exact_solution", "Exact Solution")
+location = "./Figures"
+pde.plot_solution(domain, 100, u_exact, "exact_solution", "Exact Solution", location)
 
 u_exact.interpolate(initial_condition)
-pde.plot_solution(domain, u_exact, "initial_exact", "Initial Exact")
+pde.plot_solution(domain, 100, u_exact, "initial_exact", "Initial Exact", location)
 
+pde.plot_2d(domain, 100, epsilon, 'Espilon', 'epsilon_2d', location=location)
+pde.plot_2d(domain, 100, RH, 'RH', 'rh', location=location)
+pde.plot_2d(domain, 100, u_n, 'u_n', 'sol_2d', location=location)
+pde.plot_2d(domain, 100, u_exact, 'u_exact', 'u_exact_2d', location=location)
+for Rh in RH.x.array:
+    print(Rh)
 
 print(f'Error: {np.abs(u_exact.x.array - uh.x.array)}')
 
