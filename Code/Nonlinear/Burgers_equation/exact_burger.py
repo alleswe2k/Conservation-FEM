@@ -169,7 +169,7 @@ if PLOT:
     sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
                 position_x=0.1, position_y=0.8, width=0.8, height=0.1)
 
-    renderer = plotter.add_mesh(warped, show_edges=True, lighting=False,
+    renderer = plotter.add_mesh(warped, show_edges=False, lighting=False,
                                 cmap=viridis, scalar_bar_args=sargs,
                                 clim=[0, max(uh.x.array)])
     
@@ -193,7 +193,7 @@ for cell in range(num_cells):
 h_DG.x.array[:] = hk_values
 
 
-v = ufl.TestFunction(V)
+# v = ufl.TestFunction(V)
 h_trial = ufl.TrialFunction(V)
 a_h = h_trial * v * ufl.dx
 L_h = h_DG * v * ufl.dx
@@ -239,7 +239,7 @@ for i in range(num_steps -1):
 
     n, converged = Rh_problem.solve(RH)
     # n, converged = Rh.solve(uh)
-    # assert (converged)
+    assert (converged)
     RH.x.array[:] = RH.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
     epsilon = fem.Function(V)
 
