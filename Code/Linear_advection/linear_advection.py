@@ -14,6 +14,9 @@ from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, a
 
 # Enable or disable real-time plotting
 PLOT = False
+location_data = "Code/Linear_advection/Data"
+location_figures = "Code/Linear_advection/Figures"
+
 # Creating mesh
 gmsh.initialize()
 
@@ -81,7 +84,7 @@ boundary_facets = mesh.locate_entities_boundary(
 bc = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
 # Time-dependent output
-xdmf = io.XDMFFile(domain.comm, "linear_advection.xdmf", "w")
+xdmf = io.XDMFFile(domain.comm, location_data, "w")
 xdmf.write_mesh(domain)
 
 # Define solution variable, and interpolate initial solution for visualization in Paraview
