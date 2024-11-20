@@ -16,31 +16,12 @@ from PDE_solver import PDE_solver
 
 
 pde = PDE_solver()
-PLOT = True
-# gmsh.initialize()
-# mesh_comm = MPI.COMM_WORLD
-
-# membrane = gmsh.model.occ.addRectangle(-1,-1, 0, 1,1)
-# # membrane = mesh.create_unit_square(MPI.COMM_WORLD, 1000, 1000)
-# gmsh.model.occ.synchronize()
-
-# gdim = 2
-# gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
-
-# hmax = 1/16 # 0.05 in example
-# gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
-# gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
-# gmsh.model.mesh.generate(gdim)
-
-# gmsh_model_rank = 0
-# domain, cell_markers, facet_markers = gmshio.model_to_mesh(gmsh.model, mesh_comm, gmsh_model_rank, gdim=gdim)
+PLOT = False
 
 domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [100, 100], cell_type=mesh.CellType.triangle)
 
 V = fem.functionspace(domain, ("Lagrange", 1))
 DG0 = fem.functionspace(domain, ("DG", 0))
-DG1 = fem.functionspace(domain, ("DG", 1))
-
 
 def velocity_field(u):
     # Apply nonlinear operators correctly to the scalar function u
@@ -145,6 +126,7 @@ u_exact_boundary.interpolate(exact_solution)
 
 # Apply the interpolated exact solution on the boundary
 bc = fem.dirichletbc(u_exact_boundary, boundary_dofs)
+bc0 = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
 # Time-dependent output
 xdmf = io.XDMFFile(domain.comm, "Code/Nonlinear/Burgers_equation/Output/solution.xdmf", "w")
@@ -165,7 +147,7 @@ F = (uh*v *ufl.dx -
      u_n*v *ufl.dx + 
      0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
      0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
-
+pde.plot_2d(domain, 100, u_n, 'u_n', 'init_2d', location='./Figures')
 
 nonlin_problem = NonlinearProblem(F, uh, bcs = [bc])
 nonlin_solver = NewtonSolver(MPI.COMM_WORLD, nonlin_problem)
@@ -192,16 +174,23 @@ if PLOT:
                                 clim=[0, max(uh.x.array)])
     
 
-h_DG = fem.Function(DG1)
+h_DG = fem.Function(DG0)  # Cell-based function for hk values
+
+cell_to_vertex_map = domain.topology.connectivity(domain.topology.dim, 0)
+vertex_coords = domain.geometry.x
+
 num_cells = domain.topology.index_map(domain.topology.dim).size_local
+hk_values = np.zeros(num_cells)
 
 for cell in range(num_cells):
-    # TODO: DG instead of V?
-    loc2glb = DG1.dofmap.cell_dofs(cell)
-    x = DG1.tabulate_dof_coordinates()[loc2glb]
-    edges = [np.linalg.norm(x[i] - x[j]) for i in range(3) for j in range(i+1, 3)]
-    hk = min(edges) # NOTE: Max gives better convergence
-    h_DG.x.array[loc2glb] = hk
+    # Get the vertices of the current cell
+    cell_vertices = cell_to_vertex_map.links(cell)
+    coords = vertex_coords[cell_vertices]  # Coordinates of the vertices
+    
+    edges = [np.linalg.norm(coords[i] - coords[j]) for i in range(len(coords)) for j in range(i + 1, len(coords))]
+    hk_values[cell] = min(edges) 
+
+h_DG.x.array[:] = hk_values
 
 
 
@@ -237,10 +226,11 @@ for i in range(num_steps -1):
     # F_R = (a_R - L_R)
 
 
-    F_R = (RH*v*ufl.dx - 1/dt*u_n*v *ufl.dx - 1/dt*u_old*v*ufl.dx +
-        0.5*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx + 
-        0.5*ufl.dot(velocity_field(u_old), ufl.grad(u_old))*v*ufl.dx)
-    R_problem = NonlinearProblem(F_R, RH, bcs = [bc])
+    # F_R = (RH*v*ufl.dx - 1/dt*u_n*v *ufl.dx + 1/dt*u_old*v*ufl.dx -
+    #     0.5*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx - 
+    #     0.5*ufl.dot(velocity_field(u_old), ufl.grad(u_old))*v*ufl.dx)
+    F_R = (RH*v*ufl.dx - 1/dt*u_n*v *ufl.dx + 1/dt*u_old*v*ufl.dx - ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
+    R_problem = NonlinearProblem(F_R, RH, bcs=[bc0])
     # Rh = R_problem.solve()
 
     Rh_problem = NewtonSolver(MPI.COMM_WORLD, R_problem)
@@ -294,11 +284,18 @@ for i in range(num_steps -1):
         warped.point_data["uh"][:] = uh.x.array
         plotter.write_frame()
 
-pde.plot_solution(domain, u_exact, "exact_solution", "Exact Solution")
+location = "./Figures"
+pde.plot_solution(domain, 100, u_exact, "exact_solution", "Exact Solution", location)
 
 u_exact.interpolate(initial_condition)
-pde.plot_solution(domain, u_exact, "initial_exact", "Initial Exact")
+pde.plot_solution(domain, 100, u_exact, "initial_exact", "Initial Exact", location)
 
+pde.plot_2d(domain, 100, epsilon, 'Espilon', 'epsilon_2d', location=location)
+pde.plot_2d(domain, 100, RH, 'RH', 'rh', location=location)
+pde.plot_2d(domain, 100, u_n, 'u_n', 'sol_2d', location=location)
+pde.plot_2d(domain, 100, u_exact, 'u_exact', 'u_exact_2d', location=location)
+for Rh in RH.x.array:
+    print(Rh)
 
 print(f'Error: {np.abs(u_exact.x.array - uh.x.array)}')
 
