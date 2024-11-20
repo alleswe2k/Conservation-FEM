@@ -9,7 +9,7 @@ from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, a
 
 from PDE_solver import PDE_solver
 
-fraction = 32
+fraction = 16
 
 hmax = 1/fraction
 pde_solve = PDE_solver()
@@ -162,6 +162,6 @@ for i in range(num_steps-1):
     u_n.x.array[:] = uh.x.array
 
 
-location = "Code/Artificial_diffusion/Figures"
-pde_solve.plot_2d(domain, fraction, epsilon, 'Espilon', 'epsilon_2d', location=location)
-pde_solve.plot_solution(domain, fraction, Rh, 'Rh', 'rv', location=location)
+location = "Code/Linear_advection/Figures/RV"
+pde_solve.plot_pv_2d(domain, fraction, epsilon, 'Espilon', 'epsilon_2d', location=location)
+pde_solve.plot_pv_3d(domain, fraction, Rh, 'Rh', 'rv', location=location)
