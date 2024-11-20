@@ -27,7 +27,7 @@ def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
     return (x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2
 
 
-shift = 0.25
+shift = 0.5
 # nodes = np.array([[0.0, 0.0], [shift, 0.0], [1.0, 0.0], 
 #                   [0.0, 0.5], [shift, 0.5], [1.0, 0.5],
 #                   [0.0, 1.0], [shift, 1.0], [1.0, 1.0]], dtype=np.float64)

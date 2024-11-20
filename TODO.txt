@@ -1,0 +1,7 @@
+Rh with BDF2
+Try different normalization of Rh
+Increase Rh
+
+Try burger with first order viscosity
+
+Plot smoothness in time while we do RV (and first order viscosity?)

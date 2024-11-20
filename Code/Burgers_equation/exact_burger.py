@@ -12,10 +12,10 @@ from dolfinx.io import gmshio
 from dolfinx import fem, mesh, io, plot, nls, log
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, NonlinearProblem, LinearProblem
 from dolfinx.nls.petsc import NewtonSolver
-from PDE_solver import PDE_solver
+from Utils.PDE_plot import PDE_plot
 
 
-pde = PDE_solver()
+pde = PDE_plot()
 PLOT = False
 location_data = "Code/Burgers_equation/Data/RV/solution.xdmf"
 location_figures = "Code/Burgers_equation/Figures/RV"
