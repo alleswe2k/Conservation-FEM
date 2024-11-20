@@ -23,8 +23,6 @@ domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1
 
 V = fem.functionspace(domain, ("Lagrange", 1))
 DG0 = fem.functionspace(domain, ("DG", 0))
-DG1 = fem.functionspace(domain, ("DG", 1))
-
 
 def velocity_field(u):
     # Apply nonlinear operators correctly to the scalar function u
@@ -160,17 +158,6 @@ a = ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
 A = assemble_matrix(fem.form(a), bcs=[bc])
 A.assemble()
 
-F = (uh*v *ufl.dx -
-     u_n*v *ufl.dx + 
-     0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
-     0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
-
-
-nonlin_problem = NonlinearProblem(F, uh, bcs = [bc])
-nonlin_solver = NewtonSolver(MPI.COMM_WORLD, nonlin_problem)
-nonlin_solver.max_it = 100  # Increase maximum number of iterations
-nonlin_solver.rtol = 1e-4
-nonlin_solver.report = True
 if PLOT:
     # pyvista.start_xvfb()
 
@@ -219,21 +206,7 @@ L_h = h_DG * v * ufl.dx
 lin_problem = LinearProblem(a_h, L_h, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
 h_CG = lin_problem.solve() # returns dolfinx.fem.Function
 
-
-#Take GFEM STEP
-t += dt
-n, converged = nonlin_solver.solve(uh)
-assert (converged)
-# uh.x.scatter_forward()
-
-# Update solution at previous time step (u_n)
-u_n.x.array[:] = uh.x.array
-# Write solution to file
-# xdmf.write_function(uh, t)
-
-
-
-for i in tqdm(range(num_steps -1)):
+for i in range(num_steps):
     t += dt
 
     epsilon = fem.Function(V)
@@ -291,10 +264,10 @@ for i in tqdm(range(num_steps -1)):
 
 pde.plot_2d(domain, 100, epsilon, 'Espilon', 'epsilon_2d', location="Output")
 
-pde.plot_solution(domain, u_exact, "exact_solution", "Exact Solution")
+pde.plot_solution(domain, 100, u_exact, "exact_solution", "Exact Solution", location="Output")
 
 u_exact.interpolate(initial_condition)
-pde.plot_solution(domain, u_exact, "initial_exact", "Initial Exact")
+pde.plot_solution(domain, 100, u_exact, "initial_exact", "Initial Exact", location="Output")
 
 
 print(f'Error: {np.abs(u_exact.x.array - uh.x.array)}')

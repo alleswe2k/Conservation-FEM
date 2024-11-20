@@ -285,7 +285,6 @@ for i in range(num_steps -1):
 location = "./Figures"
 pde.plot_solution(domain, 100, u_exact, "exact_solution", "Exact Solution", location)
 
-u_exact.interpolate(initial_condition)
 pde.plot_solution(domain, 100, u_exact, "initial_exact", "Initial Exact", location)
 
 pde.plot_2d(domain, 100, epsilon, 'Espilon', 'epsilon_2d', location=location)
