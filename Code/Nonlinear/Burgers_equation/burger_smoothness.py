@@ -13,6 +13,7 @@ from dolfinx import fem, mesh, io, plot, nls, log
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, NonlinearProblem, LinearProblem
 from dolfinx.nls.petsc import NewtonSolver
 from PDE_solver import PDE_solver
+import tqdm
 
 
 pde = PDE_solver()
@@ -232,7 +233,7 @@ u_n.x.array[:] = uh.x.array
 
 
 
-for i in range(num_steps -1):
+for i in tqdm(range(num_steps -1)):
     t += dt
 
     epsilon = fem.Function(V)
@@ -288,7 +289,7 @@ for i in range(num_steps -1):
         warped.point_data["uh"][:] = uh.x.array
         plotter.write_frame()
 
-pde.plot_2d(domain, 100, epsilon, 'Espilon', 'epsilon_2d', location="figures_smoothness")
+pde.plot_2d(domain, 100, epsilon, 'Espilon', 'epsilon_2d', location="Output")
 
 pde.plot_solution(domain, u_exact, "exact_solution", "Exact Solution")
 
