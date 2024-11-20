@@ -152,7 +152,7 @@ pde.plot_2d(domain, 100, u_n, 'u_n', 'init_2d', location='./Figures')
 nonlin_problem = NonlinearProblem(F, uh, bcs = [bc])
 nonlin_solver = NewtonSolver(MPI.COMM_WORLD, nonlin_problem)
 nonlin_solver.max_it = 100  # Increase maximum number of iterations
-nonlin_solver.rtol = 1e-1
+nonlin_solver.rtol = 1e-4
 nonlin_solver.report = True
 if PLOT:
     # pyvista.start_xvfb()
@@ -193,7 +193,6 @@ for cell in range(num_cells):
 h_DG.x.array[:] = hk_values
 
 
-
 v = ufl.TestFunction(V)
 h_trial = ufl.TrialFunction(V)
 a_h = h_trial * v * ufl.dx
@@ -220,7 +219,6 @@ u_n.x.array[:] = uh.x.array
 for i in range(num_steps -1):
     t += dt
 
-    
     # a_R = u*v*ufl.dx
     # L_R = 1/dt*u_n * v * ufl.dx - 1/dt* u_old * v *ufl.dx + ufl.dot(velocity_field(u_n),ufl.grad(u_n))* v * ufl.dx
     # F_R = (a_R - L_R)
@@ -236,7 +234,7 @@ for i in range(num_steps -1):
     Rh_problem = NewtonSolver(MPI.COMM_WORLD, R_problem)
     Rh_problem.convergence_criterion = "incremental"
     Rh_problem.max_it = 100  # Increase maximum number of iterations
-    Rh_problem.rtol =  1e-1
+    Rh_problem.rtol =  1e-4
     Rh_problem.report = True
 
     n, converged = Rh_problem.solve(RH)
@@ -263,10 +261,10 @@ for i in range(num_steps -1):
     problem = NonlinearProblem(F, uh, bcs = [bc])
     solver = NewtonSolver(MPI.COMM_WORLD, problem)
     solver.max_it = 100  # Increase maximum number of iterations
-    solver.rtol =  1e-1
+    solver.rtol =  1e-4
     solver.report = True
 
-    # Solve linear problem
+    # Solve nonlinear problem
     n, converged = solver.solve(uh)
     assert (converged)
     uh.x.scatter_forward()
@@ -302,8 +300,3 @@ print(f'Error: {np.abs(u_exact.x.array - uh.x.array)}')
 if PLOT:
     plotter.close()
 xdmf.close()
-
-
-  
-
-
