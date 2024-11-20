@@ -36,6 +36,7 @@ domain, cell_markers, facet_markers = gmshio.model_to_mesh(gmsh.model, mesh_comm
 V = fem.functionspace(domain, ("Lagrange", 1))
 # domain.geometry.dim = (2, )
 W = fem.functionspace(domain, ("Lagrange", 1, (domain.geometry.dim, ))) # Lagrange 2 in documentation
+DG0 = fem.functionspace(domain, ("DG", 0))
 
 # def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
 #     return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
@@ -63,9 +64,6 @@ w.interpolate(velocity_field)
 
 w_values = w.x.array.reshape((-1, domain.geometry.dim))
 w_inf_norm = np.linalg.norm(w_values, ord=np.inf)
-# TODO: This is probably more correct
-# w_norms = np.linalg.norm(w_values, axis=1)
-# w_inf_norm = np.max(w_norms)
 
 # Define temporal parameters
 CFL = 0.5
@@ -76,8 +74,6 @@ num_steps = int(np.ceil(T/dt))
 Cvel = 0.25
 CRV = 1.0
 
-# print("Infinity norm of the velocity field w:", w_inf_norm)
-
 # Create boundary condition
 fdim = domain.topology.dim - 1
 boundary_facets = mesh.locate_entities_boundary(
@@ -85,7 +81,7 @@ boundary_facets = mesh.locate_entities_boundary(
 bc = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
 # Time-dependent output
-xdmf = io.XDMFFile(domain.comm, "RV.xdmf", "w")
+xdmf = io.XDMFFile(domain.comm, "RV_node.xdmf", "w")
 xdmf.write_mesh(domain)
 
 # Define solution variable, and interpolate initial solution for visualization in Paraview
@@ -124,7 +120,7 @@ if PLOT:
     grid = pyvista.UnstructuredGrid(*plot.vtk_mesh(V))
 
     plotter = pyvista.Plotter()
-    plotter.open_gif("RV.gif", fps=10)
+    plotter.open_gif("RV_node.gif", fps=10)
 
     grid.point_data["uh"] = uh.x.array
     warped = grid.warp_by_scalar("uh", factor=1)
@@ -136,6 +132,35 @@ if PLOT:
     renderer = plotter.add_mesh(warped, show_edges=True, lighting=False,
                                 cmap=viridis, scalar_bar_args=sargs,
                                 clim=[0, max(uh.x.array)])
+
+""" First, project hk in DG(0) on h_h in Lagrange(1) """
+h_DG = fem.Function(DG0)  # Cell-based function for hk values
+
+cell_to_vertex_map = domain.topology.connectivity(domain.topology.dim, 0)
+vertex_coords = domain.geometry.x
+
+num_cells = domain.topology.index_map(domain.topology.dim).size_local
+hk_values = np.zeros(num_cells)
+
+for cell in range(num_cells):
+    # Get the vertices of the current cell
+    cell_vertices = cell_to_vertex_map.links(cell)
+    coords = vertex_coords[cell_vertices]  # Coordinates of the vertices
+    
+    edges = [np.linalg.norm(coords[i] - coords[j]) for i in range(len(coords)) for j in range(i + 1, len(coords))]
+    hk_values[cell] = min(edges) 
+
+h_DG.x.array[:] = hk_values
+
+v = ufl.TestFunction(V)
+
+h_trial = ufl.TrialFunction(V)
+a_h = h_trial * v * ufl.dx
+L_h = h_DG * v * ufl.dx
+
+# Solve linear system
+problem = LinearProblem(a_h, L_h, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+h_CG = problem.solve() # returns dolfinx.fem.Function
 
 """ Take on GFEM step for residual calculation """
 t += dt
@@ -160,7 +185,7 @@ u_n.x.array[:] = uh.x.array
 # Write solution to file
 xdmf.write_function(uh, t)
 
-""" Then time loop """
+# """ Then time loop """
 for i in range(num_steps-1):
     t += dt
 
@@ -168,29 +193,19 @@ for i in range(num_steps-1):
     L_R = 1/dt * u_n * v * ufl.dx - 1/dt * u_old * v * ufl.dx + ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx
 
     # Solve linear system
-    problem = LinearProblem(a_R, L_R, petsc_options={"kst_type": "preonly", "pc_type": "lu"})
+    problem = LinearProblem(a_R, L_R, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
     Rh = problem.solve() # returns dolfinx.fem.Function
     Rh.x.array[:] = Rh.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
-    # print(np.max(u_n.x.array - np.mean(u_n.x.array)))
-    # print(u_n.x.array)
 
-    epsilon = fem.Function(V) # TODO: Test DG space
-    num_cells = domain.topology.index_map(domain.topology.dim).size_local
+    epsilon = fem.Function(V)
 
-    for cell in range(num_cells):
-        loc2glb = V.dofmap.cell_dofs(cell)
-        Rk = np.max(np.abs(Rh.x.array[loc2glb]))
+    for node in range(Rh.x.array.size):
+        hi = h_CG.x.array[node]
+        Ri = Rh.x.array[node]
         w_values = w.x.array.reshape((-1, domain.geometry.dim))
-        Bk = np.max(np.sqrt(np.sum(w_values[loc2glb]**2, axis=1)))
-        
-        x = V.tabulate_dof_coordinates()[loc2glb]
-        edges = [np.linalg.norm(x[i] - x[j]) for i in range(3) for j in range(i+1, 3)]
-        hk = max(edges)
-
-        epsilon_k = min(Cvel * hk * Bk, CRV * hk **2 * Rk)
-        for dof in loc2glb:
-            # TODO: Try = instead of +=
-            epsilon.x.array[dof] = epsilon_k
+        fi = w_values[node]
+        fi_norm = np.linalg.norm(fi)
+        epsilon.x.array[node] = min(Cvel * hi * fi_norm, CRV * hi ** 2 * np.abs(Ri))
 
     a = u * v * ufl.dx + 0.5 * dt * ufl.dot(w, ufl.grad(u)) * v * ufl.dx + 0.5 * epsilon * dt * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
     L = u_n * v * ufl.dx - 0.5 * dt * ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx - 0.5 * epsilon * dt * ufl.dot(ufl.grad(u_n), ufl.grad(v)) * ufl.dx
@@ -204,10 +219,7 @@ for i in range(num_steps-1):
     A.assemble()
     b = create_vector(linear_form)
 
-    solver = PETSc.KSP().create(domain.comm)
     solver.setOperators(A)
-    solver.setType(PETSc.KSP.Type.PREONLY)
-    solver.getPC().setType(PETSc.PC.Type.LU)
     """ Rest """
     # Update the right hand side reusing the initial vector
     with b.localForm() as loc_b:
