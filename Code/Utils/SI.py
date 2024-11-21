@@ -27,7 +27,7 @@ class SI:
         
         return node_patches
 
-    def get_epsilon(self, w, node_patches):
+    def get_epsilon(self, velocity_field, node_patches, h_CG, u_n, A):
         V = fem.functionspace(self.domain, ("Lagrange", 1))
         epsilon = fem.Function(V)
 
@@ -35,8 +35,8 @@ class SI:
             # node = i and adjacent_nodes (including self) = j
             # print("Node:", node, " - Adjacent nodes:", adjacent_nodes)
             hi = h_CG.x.array[node]
-            w_values = w.x.array.reshape((-1, domain.geometry.dim))
-            fi = w_values[node]
+            w = velocity_field(u_n.x.array[node])
+            fi = np.array(w, dtype = 'float')
             fi_norm = np.linalg.norm(fi)
 
             numerator = 0
@@ -50,4 +50,6 @@ class SI:
 
             alpha = np.abs(numerator) / max(denominator, 1e-8)
             # print('Numerator:', np.abs(numerator), ' - Denominator:', denominator, ' - Alpha:', alpha)
-            epsilon.x.array[node] = alpha * Cm * hi * fi_norm
+            epsilon.x.array[node] = alpha * self.Cm * hi * fi_norm
+        
+        return epsilon
