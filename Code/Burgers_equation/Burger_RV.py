@@ -9,15 +9,19 @@ from mpi4py import MPI
 import gmsh
 from dolfinx.io import gmshio
 
-from dolfinx import fem, mesh, io, plot, nls, log
-from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, NonlinearProblem, LinearProblem
+from dolfinx import fem, mesh, plot
+from dolfinx.fem.petsc import NonlinearProblem
 from dolfinx.nls.petsc import NewtonSolver
 from Utils.PDE_plot import PDE_plot
 
 from Utils.helpers import get_nodal_h
 from Utils.RV import RV
 
-location = './Figures'
+import os
+script_dir = os.path.dirname(os.path.abspath(__file__))
+location_figures = os.path.join(script_dir, 'Figures/SI') # location = './Figures'
+location_data = os.path.join(script_dir, 'Data/SI') # location = './Data'
+
 pde = PDE_plot()
 PLOT = True
 
@@ -89,7 +93,6 @@ F = (uh*v *ufl.dx -
      u_n*v *ufl.dx + 
      0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
      0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
-pde.plot_2d(domain, 100, u_n, 'u_n', 'init_2d', location=location)
 
 nonlin_problem = NonlinearProblem(F, uh, bcs = [bc])
 nonlin_solver = NewtonSolver(MPI.COMM_WORLD, nonlin_problem)
@@ -102,7 +105,7 @@ if PLOT:
     grid = pyvista.UnstructuredGrid(*plot.vtk_mesh(V))
 
     plotter = pyvista.Plotter()
-    plotter.open_gif("./Figures/burger.gif", fps=10)
+    plotter.open_gif(f"{location_figures}/RV_burger.gif", fps=10)
 
     grid.point_data["uh"] = uh.x.array
     warped = grid.warp_by_scalar("uh", factor=1)
@@ -177,5 +180,5 @@ for i in range(num_steps -1):
 if PLOT:
     plotter.close()
 
-pde.plot_2d(domain, 100, epsilon, 'Espilon', 'epsilon_2d', location=location)
-pde.plot_2d(domain, 100, RH, 'RH', 'rh_2d', location=location)
+pde.plot_pv_2d(domain, hmax, epsilon, 'Epsilon', 'RV_epsilon_2d', location_figures)
+pde.plot_pv_2d(domain, hmax, RH, 'Rh', 'RV_RH_2d', location_figures)

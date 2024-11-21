@@ -4,9 +4,8 @@ import numpy as np
 from dolfinx import fem
 from dolfinx.fem.petsc import LinearProblem
 class SI:
-    def __init__(self, Cvel, Crv, domain):
-        self.Cvel = Cvel
-        self.Crv = Crv
+    def __init__(self, Cm, domain):
+        self.Cm = Cm
         self.domain = domain
     
     def get_patch_dictionary(self):

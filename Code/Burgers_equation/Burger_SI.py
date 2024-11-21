@@ -9,15 +9,19 @@ from mpi4py import MPI
 import gmsh
 from dolfinx.io import gmshio
 
-from dolfinx import fem, mesh, io, plot, nls, log
-from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, NonlinearProblem, LinearProblem
+from dolfinx import fem, mesh, plot
+from dolfinx.fem.petsc import NonlinearProblem, assemble_matrix
 from dolfinx.nls.petsc import NewtonSolver
 from Utils.PDE_plot import PDE_plot
 
 from Utils.helpers import get_nodal_h
-from Utils.RV import RV
+from Utils.SI import SI
 
-location = './Figures'
+import os
+script_dir = os.path.dirname(os.path.abspath(__file__))
+location_figures = os.path.join(script_dir, 'Figures/SI') # location = './Figures'
+location_data = os.path.join(script_dir, 'Data/SI') # location = './Data'
+
 pde = PDE_plot()
 PLOT = True
 
@@ -60,10 +64,9 @@ t = 0  # Start time
 T = 0.5 # Final time
 dt = 0.01
 num_steps = int(np.ceil(T/dt))
-Cvel = 0.25
-CRV = 4.0
+Cm = 0.5
 
-rv = RV(Cvel, CRV, domain)
+si = SI(Cm, domain)
 
 # # Create boundary condition
 fdim = domain.topology.dim - 1
@@ -83,19 +86,6 @@ RH = fem.Function(V)
 RH.name = "RH"
 RH.interpolate(lambda x: np.full(x.shape[1], 0, dtype = np.float64))
 
-# Variational problem and solver
-u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
-F = (uh*v *ufl.dx -
-     u_n*v *ufl.dx + 
-     0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
-     0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
-pde.plot_2d(domain, 100, u_n, 'u_n', 'init_2d', location=location)
-
-nonlin_problem = NonlinearProblem(F, uh, bcs = [bc])
-nonlin_solver = NewtonSolver(MPI.COMM_WORLD, nonlin_problem)
-nonlin_solver.max_it = 100  # Increase maximum number of iterations
-nonlin_solver.rtol = 1e-4
-nonlin_solver.report = True
 if PLOT:
     # pyvista.start_xvfb()
 
@@ -117,9 +107,22 @@ if PLOT:
     
 
 h_CG = get_nodal_h(domain)
+node_patches = si.get_patch_dictionary()
 
+""" Take one GFEM step """
+# Variational problem and solver
+u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
+F = (uh*v *ufl.dx -
+     u_n*v *ufl.dx + 
+     0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
+     0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
 
-#Take GFEM STEP
+nonlin_problem = NonlinearProblem(F, uh, bcs = [bc])
+nonlin_solver = NewtonSolver(MPI.COMM_WORLD, nonlin_problem)
+nonlin_solver.max_it = 100  # Increase maximum number of iterations
+nonlin_solver.rtol = 1e-4
+nonlin_solver.report = True
+
 t += dt
 n, converged = nonlin_solver.solve(uh)
 assert (converged)
@@ -130,7 +133,10 @@ u_n.x.array[:] = uh.x.array
 # Write solution to file
 # xdmf.write_function(uh, t)
 
-
+""" Assemble stiffness matrix, obtain element values """
+a = ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
+A = assemble_matrix(fem.form(a), bcs=[bc])
+A.assemble()
 
 for i in range(num_steps -1):
     t += dt
@@ -149,7 +155,8 @@ for i in range(num_steps -1):
     # n, converged = Rh.solve(uh)
     assert (converged)
     RH.x.array[:] = RH.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
-    epsilon = rv.get_epsilon(uh, velocity_field, RH, h_CG)
+    w = velocity_field()
+    epsilon = si.get_epsilon(w, node_patches, h_CG, u_n, A)
     
     problem = NonlinearProblem(F, uh, bcs = [bc])
     solver = NewtonSolver(MPI.COMM_WORLD, problem)
@@ -177,5 +184,5 @@ for i in range(num_steps -1):
 if PLOT:
     plotter.close()
 
-pde.plot_2d(domain, 100, epsilon, 'Espilon', 'epsilon_2d', location=location)
-pde.plot_2d(domain, 100, RH, 'RH', 'rh_2d', location=location)
+pde.plot_pv_2d(domain, hmax, epsilon, 'Epsilon', 'SI_epsilon_2d', location_figures)
+pde.plot_pv_2d(domain, hmax, RH, 'Rh', 'SI_Rh_2d', location_figures)

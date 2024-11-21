@@ -6,19 +6,24 @@ import numpy as np
 from petsc4py import PETSc
 from mpi4py import MPI
 
-import gmsh
-from dolfinx.io import gmshio
-
-from dolfinx import fem, mesh, io, plot, nls, log
-from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, NonlinearProblem, LinearProblem
+from dolfinx import fem, mesh, io, plot
+from dolfinx.fem.petsc import NonlinearProblem
 from dolfinx.nls.petsc import NewtonSolver
 from Utils.PDE_plot import PDE_plot
 
+from Utils.helpers import get_nodal_h
+from Utils.RV import RV
+
+import os
+script_dir = os.path.dirname(os.path.abspath(__file__))
+location_figures = os.path.join(script_dir, 'Figures/SI') # location = './Figures'
+location_data = os.path.join(script_dir, 'Data/SI') # location = './Data'
 
 pde = PDE_plot()
 PLOT = False
+mesh_size = 100
 
-domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [100, 100], cell_type=mesh.CellType.triangle)
+domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [mesh_size, mesh_size], cell_type=mesh.CellType.triangle)
 
 V = fem.functionspace(domain, ("Lagrange", 1))
 DG0 = fem.functionspace(domain, ("DG", 0))
@@ -105,6 +110,7 @@ num_steps = int(np.ceil(T/dt))
 Cvel = 0.25
 CRV = 4.0
 
+rv = RV(Cvel, CRV, domain)
 
 u_exact_boundary = fem.Function(V)
 u_exact_boundary.interpolate(exact_solution)
@@ -129,7 +135,7 @@ bc = fem.dirichletbc(u_exact_boundary, boundary_dofs)
 bc0 = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
 # Time-dependent output
-xdmf = io.XDMFFile(domain.comm, "Code/Nonlinear/Burgers_equation/Output/solution.xdmf", "w")
+xdmf = io.XDMFFile(domain.comm, location_data, "w")
 xdmf.write_mesh(domain)
 
 # Define solution variable, and interpolate initial solution for visualization in Paraview
@@ -147,7 +153,6 @@ F = (uh*v *ufl.dx -
      u_n*v *ufl.dx + 
      0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
      0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
-pde.plot_2d(domain, 100, u_n, 'u_n', 'E_init_2d', location='./Figures')
 
 nonlin_problem = NonlinearProblem(F, uh, bcs = [bc])
 nonlin_solver = NewtonSolver(MPI.COMM_WORLD, nonlin_problem)
@@ -160,7 +165,7 @@ if PLOT:
     grid = pyvista.UnstructuredGrid(*plot.vtk_mesh(V))
 
     plotter = pyvista.Plotter()
-    plotter.open_gif("E_burger.gif", fps=10)
+    plotter.open_gif(f"{location_figures}/RV_E_burger.gif", fps=10)
 
     grid.point_data["uh"] = uh.x.array
     warped = grid.warp_by_scalar("uh", factor=1)
@@ -174,33 +179,7 @@ if PLOT:
                                 clim=[0, max(uh.x.array)])
     
 
-h_DG = fem.Function(DG0)  # Cell-based function for hk values
-
-cell_to_vertex_map = domain.topology.connectivity(domain.topology.dim, 0)
-vertex_coords = domain.geometry.x
-
-num_cells = domain.topology.index_map(domain.topology.dim).size_local
-hk_values = np.zeros(num_cells)
-
-for cell in range(num_cells):
-    # Get the vertices of the current cell
-    cell_vertices = cell_to_vertex_map.links(cell)
-    coords = vertex_coords[cell_vertices]  # Coordinates of the vertices
-    
-    edges = [np.linalg.norm(coords[i] - coords[j]) for i in range(len(coords)) for j in range(i + 1, len(coords))]
-    hk_values[cell] = min(edges) 
-
-h_DG.x.array[:] = hk_values
-
-
-# v = ufl.TestFunction(V)
-h_trial = ufl.TrialFunction(V)
-a_h = h_trial * v * ufl.dx
-L_h = h_DG * v * ufl.dx
-
-# Solve linear system
-lin_problem = LinearProblem(a_h, L_h, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-h_CG = lin_problem.solve() # returns dolfinx.fem.Function
+h_CG = get_nodal_h(domain)
 
 
 #Take GFEM STEP
@@ -241,17 +220,9 @@ for i in range(num_steps -1):
     # n, converged = Rh.solve(uh)
     assert (converged)
     RH.x.array[:] = RH.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
-    epsilon = fem.Function(V)
-    w = velocity_field(uh)
 
-    for node in range(RH.x.array.size):
-        hi = h_CG.x.array[node]
-        Ri = RH.x.array[node]
-        w_values = w.x.array.reshape((-1, domain.geometry.dim))
-        fi = w_values[node]
-        fi_norm = np.linalg.norm(fi)
-        epsilon.x.array[node] = min(Cvel * hi * fi_norm, CRV * hi ** 2 * np.abs(Ri))
-    
+    epsilon = rv.get_epsilon(uh, velocity_field, RH, h_CG)
+
     F = (uh*v *ufl.dx - u_n*v *ufl.dx + 
         0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
         0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx + 
@@ -282,15 +253,14 @@ for i in range(num_steps -1):
         warped.point_data["uh"][:] = uh.x.array
         plotter.write_frame()
 
-location = "./Figures"
-pde.plot_solution(domain, 100, u_exact, "exact_solution", "E_exact_solution", location)
+pde.plot_pv_3d(domain, 100, u_exact, "exact_solution", "E_exact_solution", location_figures)
 
-pde.plot_solution(domain, 100, u_exact, "initial_exact", "E_initial_exact", location)
+pde.plot_pv_3d(domain, 100, u_exact, "initial_exact", "E_initial_exact", location_figures)
 
-pde.plot_2d(domain, 100, epsilon, 'Espilon', 'E_epsilon_2d', location=location)
-pde.plot_2d(domain, 100, RH, 'RH', 'E_rh', location=location)
-pde.plot_2d(domain, 100, u_n, 'u_n', 'E_sol_2d', location=location)
-pde.plot_2d(domain, 100, u_exact, 'u_exact', 'E_u_exact_2d', location=location)
+pde.plot_pv_2d(domain, 100, epsilon, 'Espilon', 'E_epsilon_2d', location_figures)
+pde.plot_pv_2d(domain, 100, RH, 'RH', 'E_rh', location_figures)
+pde.plot_pv_2d(domain, 100, u_n, 'u_n', 'E_sol_2d', location_figures)
+pde.plot_pv_2d(domain, 100, u_exact, 'u_exact', 'E_u_exact_2d', location_figures)
 for Rh in RH.x.array:
     print(Rh)
 
