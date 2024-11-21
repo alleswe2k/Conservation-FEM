@@ -95,15 +95,9 @@ u_old = fem.Function(V)
 u_old.name = "u_old"
 u_old.interpolate(initial_condition)
 
-
-
-# CFL = 0.5
-# t = 0  # Start time
-# T = 0.5 # Final time
-# dt = 0.01
-# num_steps = int(np.ceil(T/dt))
-# Cvel = 0.25
-# CRV = 1.0
+u_old_old = fem.Function(V)
+u_old_old.name = "u_old_old"
+u_old_old.interpolate(initial_condition)
 
 CFL = 0.2
 t = 0  # Start time
@@ -111,7 +105,7 @@ T = 0.5 # Final time
 dt = 0.01
 num_steps = int(np.ceil(T/dt))
 Cvel = 0.25
-CRV = 4.0
+CRV = 10.0
 
 rv = RV(Cvel, CRV, domain)
 
@@ -166,56 +160,31 @@ if PLOT:
 
 h_CG = get_nodal_h(domain)
 
-# Create a function to interpolate the exact solution
-u_exact_boundary = fem.Function(V)
-u_exact_boundary.interpolate(lambda x: exact_solution(x, dt))
-
-# Apply the interpolated exact solution on the boundary
-bc = fem.dirichletbc(u_exact_boundary, boundary_dofs)
-# Variational problem and solver
 u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
-F = (uh*v *ufl.dx -
-     u_n*v *ufl.dx + 
-     0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
-     0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
 
-nonlin_problem = NonlinearProblem(F, uh, bcs=[bc])
-nonlin_solver = NewtonSolver(MPI.COMM_WORLD, nonlin_problem)
-nonlin_solver.max_it = 100  # Increase maximum number of iterations
-nonlin_solver.rtol = 1e-4
-nonlin_solver.report = True
-
-#Take GFEM STEP
-t += dt
-n, converged = nonlin_solver.solve(uh)
-assert (converged)
-# uh.x.scatter_forward()
-
-# Update solution at previous time step (u_n)
-u_n.x.array[:] = uh.x.array
-# Write solution to file
-# xdmf.write_function(uh, t)
-
-
-
-for i in tqdm(range(num_steps-1)):
+for i in tqdm(range(num_steps)):
+    t += dt
     # Create a function to interpolate the exact solution
     u_exact_boundary = fem.Function(V)
     u_exact_boundary.interpolate(lambda x: exact_solution(x, t))
 
     # Apply the interpolated exact solution on the boundary
     bc = fem.dirichletbc(u_exact_boundary, boundary_dofs)
-    t += dt
 
     # a_R = u*v*ufl.dx
     # L_R = 1/dt*u_n * v * ufl.dx - 1/dt* u_old * v *ufl.dx + ufl.dot(velocity_field(u_n),ufl.grad(u_n))* v * ufl.dx
     # F_R = (a_R - L_R)
-
-
-    # F_R = (RH*v*ufl.dx - 1/dt*u_n*v *ufl.dx + 1/dt*u_old*v*ufl.dx -
-    #     0.5*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx - 
-    #     0.5*ufl.dot(velocity_field(u_old), ufl.grad(u_old))*v*ufl.dx)
-    F_R = (RH*v*ufl.dx - 1/dt*u_n*v *ufl.dx + 1/dt*u_old*v*ufl.dx - ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
+    """ BDF1 """
+    # F_R = (RH*v*ufl.dx - 
+    #        1/dt*u_n*v *ufl.dx + 
+    #        1/dt*u_old*v*ufl.dx - 
+    #        ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
+    """ BDF2 """
+    F_R = (RH*v*ufl.dx - 
+           3/(2*dt)*u_n*v *ufl.dx +
+           4/(2*dt)*u_old*v*ufl.dx - 
+           1/(2*dt)*u_old_old*v*ufl.dx - 
+           ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
     R_problem = NonlinearProblem(F_R, RH, bcs=[bc0])
     # Rh = R_problem.solve()
 
@@ -250,6 +219,7 @@ for i in tqdm(range(num_steps-1)):
     uh.x.scatter_forward()
 
     # Update solution at previous time step (u_n)
+    u_old_old.x.array[:] = u_old.x.array
     u_old.x.array[:] = u_n.x.array
     u_n.x.array[:] = uh.x.array
 
