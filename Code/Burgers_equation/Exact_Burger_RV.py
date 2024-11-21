@@ -96,15 +96,6 @@ u_old.name = "u_old"
 u_old.interpolate(initial_condition)
 
 
-
-# CFL = 0.5
-# t = 0  # Start time
-# T = 0.5 # Final time
-# dt = 0.01
-# num_steps = int(np.ceil(T/dt))
-# Cvel = 0.25
-# CRV = 1.0
-
 CFL = 0.2
 t = 0  # Start time
 T = 0.5 # Final time
@@ -123,8 +114,6 @@ u_exact_boundary.interpolate(exact_solution)
 fdim = domain.topology.dim - 1
 boundary_facets = mesh.locate_entities_boundary(
     domain, fdim, lambda x: np.full(x.shape[1], True, dtype=bool))
-# # bc = fem.dirichletbc(PETSc.ScalarType(np.pi/4), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
-# bc = fem.dirichletbc(u_exact_boundary, fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
 # Locate boundary degrees of freedom
 boundary_dofs = fem.locate_dofs_topological(V, fdim, boundary_facets)
@@ -194,7 +183,7 @@ assert (converged)
 # Update solution at previous time step (u_n)
 u_n.x.array[:] = uh.x.array
 # Write solution to file
-# xdmf.write_function(uh, t)
+xdmf.write_function(uh, t)
 
 
 
@@ -254,7 +243,7 @@ for i in tqdm(range(num_steps-1)):
     u_n.x.array[:] = uh.x.array
 
     # Write solution to file
-    # xdmf.write_function(uh, t)
+    xdmf.write_function(uh, t)
     # Update plot
     if PLOT:
         new_warped = grid.warp_by_scalar("uh", factor=1)
