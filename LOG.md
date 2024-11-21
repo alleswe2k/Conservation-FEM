@@ -11,6 +11,11 @@
 For all of the above, convergence rate is to be reported for mesh sizes 1/4, 1/8, 1/16 and 1/32. FEniCSx (the new version of FEniCS) is used.
 
 # Progression map
+
+## W. 47 
+We have gone through the code and verified each part, the code now yields more accurate figures regarding the exact burgers and KPP. We have also tested the BDF2 method of calculating RH for burgers and KPP as well as a different approach of normalizing the residual. We went through our Github repo and restructured the folder for an easier time navigating it. 
+
+
 ## w. 46
 We've implemented residual viscosity, both cell based and nodal based. This was tested on the
 linear advection PDE. We've also implemented the KPP and Burger PDE, and stabilized both with nodal
