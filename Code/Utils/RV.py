@@ -23,6 +23,7 @@ class RV:
             epsilon.x.array[node] = min(self.Cvel * hi * fi_norm, self.Crv * hi ** 2 * np.abs(Ri))
         
         return epsilon
+    
     def get_epsilon_1storder(self, uh, velocity_field, residual, h):
         V = fem.functionspace(self.domain, ("Lagrange", 1))
         epsilon = fem.Function(V)
