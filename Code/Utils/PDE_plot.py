@@ -12,7 +12,7 @@ class PDE_plot():
     def __setup_plot(self, domain, vector, title):
         tdim = domain.topology.dim
         os.environ["PYVISTA_OFF_SCREEN"] = "True"
-        pv.start_xvfb()
+        #pv.start_xvfb()
         plotter = pv.Plotter(off_screen=True)
         domain.topology.create_connectivity(tdim, tdim)
         topology, cell_types, geometry = plot.vtk_mesh(domain, tdim)
