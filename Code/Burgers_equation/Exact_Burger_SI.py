@@ -2,6 +2,7 @@ import matplotlib as mpl
 import pyvista
 import ufl
 import numpy as np
+from tqdm import tqdm
 
 from mpi4py import MPI
 
@@ -30,8 +31,7 @@ def velocity_field(u):
     # Apply nonlinear operators correctly to the scalar function u
     return ufl.as_vector([u,u])
 
-def exact_solution(x): 
-    t = 0.5
+def exact_solution(x, t=0.5):
 
     u = np.zeros_like(x[0])  # Initialize the solution array with zeros
     
@@ -101,10 +101,6 @@ si = SI(Cm, domain)
 node_patches = si.get_patch_dictionary()
 
 
-u_exact_boundary = fem.Function(V)
-u_exact_boundary.interpolate(exact_solution)
-
-
 # # Create boundary condition
 fdim = domain.topology.dim - 1
 boundary_facets = mesh.locate_entities_boundary(
@@ -115,16 +111,9 @@ boundary_facets = mesh.locate_entities_boundary(
 # Locate boundary degrees of freedom
 boundary_dofs = fem.locate_dofs_topological(V, fdim, boundary_facets)
 
-# Create a function to interpolate the exact solution
-u_exact_boundary = fem.Function(V)
-u_exact_boundary.interpolate(exact_solution)
-
-# Apply the interpolated exact solution on the boundary
-bc = fem.dirichletbc(u_exact_boundary, boundary_dofs)
-
 # Time-dependent output
-xdmf = io.XDMFFile(domain.comm,location_data, "w")
-xdmf.write_mesh(domain)
+# xdmf = io.XDMFFile(domain.comm,location_data, "w")
+# xdmf.write_mesh(domain)
 
 # Define solution variable, and interpolate initial solution for visualization in Paraview
 uh = fem.Function(V)
@@ -133,11 +122,6 @@ uh.interpolate(initial_condition)
 
 # Variational problem and solver
 u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
-
-""" Assemble stiffness matrix, obtain element values """
-a = ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
-A = assemble_matrix(fem.form(a), bcs=[bc])
-A.assemble()
 
 if PLOT:
     # pyvista.start_xvfb()
@@ -161,8 +145,19 @@ if PLOT:
 
 h_CG = get_nodal_h(domain)
 
-for i in range(num_steps):
+for i in tqdm(range(num_steps)):
     t += dt
+    # Create a function to interpolate the exact solution
+    u_exact_boundary = fem.Function(V)
+    u_exact_boundary.interpolate(lambda x: exact_solution(x, t))
+
+    # Apply the interpolated exact solution on the boundary
+    bc = fem.dirichletbc(u_exact_boundary, boundary_dofs)
+
+    """ Assemble stiffness matrix, obtain element values """
+    a = ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
+    A = assemble_matrix(fem.form(a), bcs=[bc])
+    A.assemble()
 
     epsilon = si.get_epsilon(velocity_field, node_patches, h_CG, u_n, A)
     
@@ -208,4 +203,4 @@ print(f'Error: {np.abs(u_exact.x.array - uh.x.array)}')
 
 if PLOT:
     plotter.close()
-xdmf.close()
+# xdmf.close()

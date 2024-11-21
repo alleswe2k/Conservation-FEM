@@ -2,6 +2,7 @@ import matplotlib as mpl
 import pyvista
 import ufl
 import numpy as np
+from tqdm import tqdm
 
 from petsc4py import PETSc
 from mpi4py import MPI
@@ -16,11 +17,11 @@ from Utils.RV import RV
 
 import os
 script_dir = os.path.dirname(os.path.abspath(__file__))
-location_figures = os.path.join(script_dir, 'Figures/SI') # location = './Figures'
-location_data = os.path.join(script_dir, 'Data/SI') # location = './Data'
+location_figures = os.path.join(script_dir, 'Figures/RV') # location = './Figures'
+location_data = os.path.join(script_dir, 'Data/RV') # location = './Data'
 
 pde = PDE_plot()
-PLOT = False
+PLOT = True
 mesh_size = 100
 
 domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [mesh_size, mesh_size], cell_type=mesh.CellType.triangle)
@@ -32,9 +33,7 @@ def velocity_field(u):
     # Apply nonlinear operators correctly to the scalar function u
     return ufl.as_vector([u,u])
 
-def exact_solution(x): 
-    t = 0.5
-
+def exact_solution(x, t=0.5): 
     u = np.zeros_like(x[0])  # Initialize the solution array with zeros
     
     # First condition
@@ -84,6 +83,10 @@ u_exact = fem.Function(V)
 u_exact.name = "U Exact"
 u_exact.interpolate(exact_solution)
 
+u_initial = fem.Function(V)
+u_initial.name = "u_initial"
+u_initial.interpolate(initial_condition)
+
 u_n = fem.Function(V)
 u_n.name = "u_n"
 u_n.interpolate(initial_condition)
@@ -126,12 +129,6 @@ boundary_facets = mesh.locate_entities_boundary(
 # Locate boundary degrees of freedom
 boundary_dofs = fem.locate_dofs_topological(V, fdim, boundary_facets)
 
-# Create a function to interpolate the exact solution
-u_exact_boundary = fem.Function(V)
-u_exact_boundary.interpolate(exact_solution)
-
-# Apply the interpolated exact solution on the boundary
-bc = fem.dirichletbc(u_exact_boundary, boundary_dofs)
 bc0 = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
 # Time-dependent output
@@ -147,18 +144,6 @@ RH = fem.Function(V)
 RH.name = "RH"
 RH.interpolate(lambda x: np.full(x.shape[1], 0, dtype = np.float64))
 
-# Variational problem and solver
-u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
-F = (uh*v *ufl.dx -
-     u_n*v *ufl.dx + 
-     0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
-     0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
-
-nonlin_problem = NonlinearProblem(F, uh, bcs = [bc])
-nonlin_solver = NewtonSolver(MPI.COMM_WORLD, nonlin_problem)
-nonlin_solver.max_it = 100  # Increase maximum number of iterations
-nonlin_solver.rtol = 1e-4
-nonlin_solver.report = True
 if PLOT:
     # pyvista.start_xvfb()
 
@@ -181,6 +166,24 @@ if PLOT:
 
 h_CG = get_nodal_h(domain)
 
+# Create a function to interpolate the exact solution
+u_exact_boundary = fem.Function(V)
+u_exact_boundary.interpolate(lambda x: exact_solution(x, dt))
+
+# Apply the interpolated exact solution on the boundary
+bc = fem.dirichletbc(u_exact_boundary, boundary_dofs)
+# Variational problem and solver
+u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
+F = (uh*v *ufl.dx -
+     u_n*v *ufl.dx + 
+     0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
+     0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
+
+nonlin_problem = NonlinearProblem(F, uh, bcs=[bc])
+nonlin_solver = NewtonSolver(MPI.COMM_WORLD, nonlin_problem)
+nonlin_solver.max_it = 100  # Increase maximum number of iterations
+nonlin_solver.rtol = 1e-4
+nonlin_solver.report = True
 
 #Take GFEM STEP
 t += dt
@@ -195,7 +198,13 @@ u_n.x.array[:] = uh.x.array
 
 
 
-for i in range(num_steps -1):
+for i in tqdm(range(num_steps-1)):
+    # Create a function to interpolate the exact solution
+    u_exact_boundary = fem.Function(V)
+    u_exact_boundary.interpolate(lambda x: exact_solution(x, t))
+
+    # Apply the interpolated exact solution on the boundary
+    bc = fem.dirichletbc(u_exact_boundary, boundary_dofs)
     t += dt
 
     # a_R = u*v*ufl.dx
@@ -229,7 +238,7 @@ for i in range(num_steps -1):
         0.5*dt*epsilon*ufl.dot(ufl.grad(uh), ufl.grad(v))*ufl.dx +
         0.5*dt*epsilon*ufl.dot(ufl.grad(u_n), ufl.grad(v))*ufl.dx)
     
-    problem = NonlinearProblem(F, uh, bcs = [bc])
+    problem = NonlinearProblem(F, uh, bcs=[bc])
     solver = NewtonSolver(MPI.COMM_WORLD, problem)
     solver.max_it = 100  # Increase maximum number of iterations
     solver.rtol =  1e-4
@@ -253,14 +262,14 @@ for i in range(num_steps -1):
         warped.point_data["uh"][:] = uh.x.array
         plotter.write_frame()
 
-pde.plot_pv_3d(domain, 100, u_exact, "exact_solution", "E_exact_solution", location_figures)
+pde.plot_pv_3d(domain, mesh_size, u_exact, "exact_solution", "E_exact_solution_3D", location_figures)
+pde.plot_pv_3d(domain, mesh_size, u_initial, "exact_initial", "E_exact_initial_3D", location_figures)
+pde.plot_pv_3d(domain, mesh_size, RH, "Rh", "E_Rh_3D", location_figures)
 
-pde.plot_pv_3d(domain, 100, u_exact, "initial_exact", "E_initial_exact", location_figures)
-
-pde.plot_pv_2d(domain, 100, epsilon, 'Espilon', 'E_epsilon_2d', location_figures)
-pde.plot_pv_2d(domain, 100, RH, 'RH', 'E_rh', location_figures)
-pde.plot_pv_2d(domain, 100, u_n, 'u_n', 'E_sol_2d', location_figures)
-pde.plot_pv_2d(domain, 100, u_exact, 'u_exact', 'E_u_exact_2d', location_figures)
+pde.plot_pv_2d(domain, mesh_size, epsilon, 'Espilon', 'E_epsilon_2D', location_figures)
+pde.plot_pv_2d(domain, mesh_size, RH, 'RH', 'E_Rh_2D', location_figures)
+pde.plot_pv_2d(domain, mesh_size, u_n, 'u_n', 'E_sol_2D', location_figures)
+pde.plot_pv_2d(domain, mesh_size, u_exact, 'u_exact', 'E_u_exact_2D', location_figures)
 for Rh in RH.x.array:
     print(Rh)
 

@@ -92,7 +92,7 @@ if PLOT:
     grid = pyvista.UnstructuredGrid(*plot.vtk_mesh(V))
 
     plotter = pyvista.Plotter()
-    plotter.open_gif("burger.gif", fps=10)
+    plotter.open_gif(f"{location_figures}/SI_burger.gif", fps=10)
 
     grid.point_data["uh"] = uh.x.array
     warped = grid.warp_by_scalar("uh", factor=1)
