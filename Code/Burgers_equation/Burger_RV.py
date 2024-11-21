@@ -19,11 +19,11 @@ from Utils.RV import RV
 
 import os
 script_dir = os.path.dirname(os.path.abspath(__file__))
-location_figures = os.path.join(script_dir, 'Figures/SI') # location = './Figures'
-location_data = os.path.join(script_dir, 'Data/SI') # location = './Data'
+location_figures = os.path.join(script_dir, 'Figures/RV') # location = './Figures'
+location_data = os.path.join(script_dir, 'Data/RV') # location = './Data'
 
 pde = PDE_plot()
-PLOT = True
+PLOT = False
 
 gmsh.initialize()
 
@@ -33,7 +33,7 @@ gmsh.model.occ.synchronize()
 gdim = 2
 gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
-hmax = 1/32 # 0.05 in example
+hmax = 1/8 # 0.05 in example
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
 gmsh.model.mesh.generate(gdim)
@@ -180,5 +180,5 @@ for i in range(num_steps -1):
 if PLOT:
     plotter.close()
 
-pde.plot_pv_2d(domain, hmax, epsilon, 'Epsilon', 'RV_epsilon_2d', location_figures)
-pde.plot_pv_2d(domain, hmax, RH, 'Rh', 'RV_RH_2d', location_figures)
+pde.plot_pv_2d(domain, 8, uh, 'Uh', 'RV_UH_2D', location_figures)
+pde.plot_pv_2d(domain, 8, RH, 'Rh', 'RV_RH_2d', location_figures)

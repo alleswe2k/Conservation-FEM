@@ -21,8 +21,8 @@ location_figures = os.path.join(script_dir, 'Figures/RV') # location = './Figure
 location_data = os.path.join(script_dir, 'Data/RV') # location = './Data'
 
 pde = PDE_plot()
-PLOT = True
-mesh_size = 100
+PLOT = False
+mesh_size = 10
 
 domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [mesh_size, mesh_size], cell_type=mesh.CellType.triangle)
 
@@ -262,19 +262,21 @@ for i in tqdm(range(num_steps-1)):
         warped.point_data["uh"][:] = uh.x.array
         plotter.write_frame()
 
-pde.plot_pv_3d(domain, mesh_size, u_exact, "exact_solution", "E_exact_solution_3D", location_figures)
-pde.plot_pv_3d(domain, mesh_size, u_initial, "exact_initial", "E_exact_initial_3D", location_figures)
-pde.plot_pv_3d(domain, mesh_size, RH, "Rh", "E_Rh_3D", location_figures)
+pde.plot_pv_2d(domain, 8, uh, 'Uh', 'RV_UH_2D', location_figures)
+pde.plot_pv_2d(domain, 8, RH, 'Rh', 'RV_RH_2d', location_figures)
 
-pde.plot_pv_2d(domain, mesh_size, epsilon, 'Espilon', 'E_epsilon_2D', location_figures)
-pde.plot_pv_2d(domain, mesh_size, RH, 'RH', 'E_Rh_2D', location_figures)
-pde.plot_pv_2d(domain, mesh_size, u_n, 'u_n', 'E_sol_2D', location_figures)
-pde.plot_pv_2d(domain, mesh_size, u_exact, 'u_exact', 'E_u_exact_2D', location_figures)
-for Rh in RH.x.array:
-    print(Rh)
+# pde.plot_pv_3d(domain, mesh_size, u_exact, "exact_solution", "E_exact_solution_3D", location_figures)
+# pde.plot_pv_3d(domain, mesh_size, u_initial, "exact_initial", "E_exact_initial_3D", location_figures)
+# pde.plot_pv_3d(domain, mesh_size, RH, "Rh", "E_Rh_3D", location_figures)
 
-print(f'Error: {np.abs(u_exact.x.array - uh.x.array)}')
+# pde.plot_pv_2d(domain, mesh_size, epsilon, 'Espilon', 'E_epsilon_2D', location_figures)
+# pde.plot_pv_2d(domain, mesh_size, RH, 'RH', 'E_Rh_2D', location_figures)
+# pde.plot_pv_2d(domain, mesh_size, u_n, 'u_n', 'E_sol_2D', location_figures)
+# pde.plot_pv_2d(domain, mesh_size, u_exact, 'u_exact', 'E_u_exact_2D', location_figures)
+
+# print(RH.x.array)
+# print(uh.x.array)
+
 
 if PLOT:
     plotter.close()
-xdmf.close()
