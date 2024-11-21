@@ -15,6 +15,12 @@ from dolfinx.io import gmshio
 from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, LinearProblem
 
+from Utils.PDE_plot import PDE_plot
+
+import os
+script_dir = os.path.dirname(os.path.abspath(__file__))
+location_figures = os.path.join(script_dir, 'Figures/SI')
+
 L2_errors = []
 hmaxes = [1/4, 1/8, 1/16, 1/32]
 for hmax in hmaxes:
@@ -78,8 +84,6 @@ for hmax in hmaxes:
     num_steps = int(np.ceil(T/dt))
     Cvel = 0.25
     CRV = 1.0
-
-    # print("Infinity norm of the velocity field w:", w_inf_norm)
 
     # Create boundary condition
     fdim = domain.topology.dim - 1
@@ -175,8 +179,6 @@ for hmax in hmaxes:
         problem = LinearProblem(a_R, L_R, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
         Rh = problem.solve() # returns dolfinx.fem.Function
         Rh.x.array[:] = Rh.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
-        # print(np.max(u_n.x.array - np.mean(u_n.x.array)))
-        # print(u_n.x.array)
 
         epsilon = fem.Function(V)
 
@@ -235,10 +237,8 @@ print(f'L2-errors:{L2_errors}')
 fitted_error = np.polyfit(np.log10(hmaxes), np.log10(L2_errors), 1)
 print(f'convergence: {fitted_error[0]}')
 
-from PDE_solver import PDE_solver
-location = "Code/Artificial_diffusion/Figures"
-pde = PDE_solver()
-pde.plot_convergence(L2_errors, 'RV-Nodal', 'rv_conv', location)
+pde = PDE_plot()
+pde.plot_convergence(L2_errors, 'RV-Nodal', 'rv_conv', location_figures)
 
 
 

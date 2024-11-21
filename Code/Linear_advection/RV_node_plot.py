@@ -7,13 +7,17 @@ from mpi4py import MPI
 from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, LinearProblem
 
-from PDE_solver import PDE_solver
+from Utils.PDE_plot import PDE_plot
+
+import os
+script_dir = os.path.dirname(os.path.abspath(__file__))
+location_figures = os.path.join(script_dir, 'Figures/RV')
 
 fraction = 16
 
 hmax = 1/fraction
-pde_solve = PDE_solver()
-domain = pde_solve.create_mesh_unit_disk(hmax)
+pde = PDE_plot()
+domain = pde.create_mesh_unit_disk(hmax)
 
 V = fem.functionspace(domain, ("Lagrange", 1))
 W = fem.functionspace(domain, ("Lagrange", 1, (domain.geometry.dim, ))) # Lagrange 2 in documentation
@@ -26,11 +30,11 @@ def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
 def velocity_field(x):
     return np.array([-2*np.pi*x[1], 2*np.pi*x[0]])
 
-u_n = pde_solve.create_vector(V, 'u_n', initial_condition)
-u_old = pde_solve.create_vector(V, 'u_old', initial_condition)
-u_ex = pde_solve.create_vector(V, 'u_ex', initial_condition)
-w = pde_solve.create_vector(W, 'w', velocity_field)
-uh = pde_solve.create_vector(V, 'uh', initial_condition)
+u_n = pde.create_vector(V, 'u_n', initial_condition)
+u_old = pde.create_vector(V, 'u_old', initial_condition)
+u_ex = pde.create_vector(V, 'u_ex', initial_condition)
+w = pde.create_vector(W, 'w', velocity_field)
+uh = pde.create_vector(V, 'uh', initial_condition)
 
 CFL = 0.5
 Cvel = 0.25
@@ -38,8 +42,8 @@ CRV = 1.0
 T = 1.0
 t = 0.0
 
-dt, num_steps = pde_solve.get_time_steps(domain, w, CFL, T, hmax)
-bc = pde_solve.boundary_condition(domain, V)
+dt, num_steps = pde.get_time_steps(domain, w, CFL, T, hmax)
+bc = pde.boundary_condition(domain, V)
 
 # Variational problem and solver
 u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
@@ -57,7 +61,7 @@ A = assemble_matrix(bilinear_form, bcs=[bc])
 A.assemble()
 b = create_vector(linear_form)
 
-solver = pde_solve.create_solver_linear(domain, A)
+solver = pde.create_solver_linear(domain, A)
 
 """ First, project hk in DG(0) on h_h in Lagrange(1) """
 h_DG = fem.Function(DG0)  # Cell-based function for hk values
@@ -161,7 +165,5 @@ for i in range(num_steps-1):
     # Update solution at previous time step (u_n)
     u_n.x.array[:] = uh.x.array
 
-
-location = "Code/Linear_advection/Figures/RV"
-pde_solve.plot_pv_2d(domain, fraction, epsilon, 'Espilon', 'epsilon_2d', location=location)
-pde_solve.plot_pv_3d(domain, fraction, Rh, 'Rh', 'rv', location=location)
+pde.plot_pv_2d(domain, fraction, epsilon, 'Epsilon', 'epsilon_2d', location=location_figures)
+pde.plot_pv_3d(domain, fraction, Rh, 'Rh', 'rv', location=location_figures)

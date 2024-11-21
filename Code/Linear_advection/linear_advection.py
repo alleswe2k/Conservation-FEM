@@ -12,10 +12,13 @@ from dolfinx.io import gmshio
 from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc
 
+import os
+script_dir = os.path.dirname(os.path.abspath(__file__))
+location_figures = os.path.join(script_dir, 'Figures/GFEM')
+location_data = os.path.join(script_dir, 'Data/GFEM/solution.xdmf')
+
 # Enable or disable real-time plotting
 PLOT = False
-location_data = "Code/Linear_advection/Data"
-location_figures = "Code/Linear_advection/Figures"
 
 # Creating mesh
 gmsh.initialize()

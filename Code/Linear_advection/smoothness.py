@@ -14,9 +14,14 @@ from dolfinx.io import gmshio
 from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, LinearProblem
 
-from PDE_solver import PDE_solver
+from Utils.PDE_plot import PDE_plot
 
-pde_solve = PDE_solver()
+import os
+script_dir = os.path.dirname(os.path.abspath(__file__))
+location_figures = os.path.join(script_dir, 'Figures/SI')
+location_data = os.path.join(script_dir, 'Data/SI/solution.xdmf')
+
+pde = PDE_plot()
 # print(PETSc.ScalarType)
 
 # Enable or disable real-time plotting
@@ -92,7 +97,7 @@ boundary_facets = mesh.locate_entities_boundary(
 bc = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
 # Time-dependent output
-xdmf = io.XDMFFile(domain.comm, "smoothness.xdmf", "w")
+xdmf = io.XDMFFile(domain.comm, location_data, "w")
 xdmf.write_mesh(domain)
 
 # Define solution variable, and interpolate initial solution for visualization in Paraview
@@ -300,6 +305,5 @@ error_L2 = np.sqrt(domain.comm.allreduce(fem.assemble_scalar(fem.form((uh - u_ex
 if domain.comm.rank == 0:
     print(f"L2-error: {error_L2:.2e}")
 
-location = "./Figures/linear_advection/SI"
-pde_solve.plot_2d(domain, fraction, epsilon, 'Espilon', 'epsilon_2d', location=location)
-pde_solve.plot_solution(domain, fraction, Rh, 'Rh', 'rv', location=location)
+pde.plot_pv_2d(domain, fraction, epsilon, 'Epsilon', 'epsilon_2d', location=location_figures)
+pde.plot_pv_3d(domain, fraction, Rh, 'Rh', 'rv', location=location_figures)

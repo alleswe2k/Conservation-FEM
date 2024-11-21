@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-import pyvista
 import ufl
 import numpy as np
 
@@ -9,7 +8,7 @@ from mpi4py import MPI
 import gmsh
 from dolfinx.io import gmshio
 
-from dolfinx import fem, mesh, io, plot
+from dolfinx import fem, mesh
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc
 
 L2_errors = []
