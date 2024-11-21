@@ -2,6 +2,7 @@ import matplotlib as mpl
 import pyvista
 import ufl
 import numpy as np
+import os 
 
 from petsc4py import PETSc
 from mpi4py import MPI
@@ -9,12 +10,20 @@ from mpi4py import MPI
 import gmsh
 from dolfinx.io import gmshio
 
-from dolfinx import fem, mesh, io, plot, nls, log
-from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, NonlinearProblem, LinearProblem
+from dolfinx import fem, mesh, io, plot
+from dolfinx.fem.petsc import NonlinearProblem, LinearProblem
 from dolfinx.nls.petsc import NewtonSolver
 
+from Utils.PDE_plot import PDE_plot
+from Utils.RV import RV
 
-PLOT = True
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+location_fig = os.path.join(script_dir, 'Figures/RV') # location = './Figures'
+location_data = os.path.join(script_dir, 'Data') # location = './Figures'
+
+pde = PDE_plot()
+PLOT = False
 gmsh.initialize()
 
 membrane = gmsh.model.occ.addRectangle(-2,-2,0,4,4)
@@ -51,11 +60,6 @@ def velocity_field(u):
     # Apply nonlinear operators correctly to the scalar function u
     return ufl.as_vector([ufl.cos(u), -ufl.sin(u)])
 
-
-def Res_condition(x):
-    return PETSc.ScalarType(0)
-
-
 u_n = fem.Function(V)
 u_n.name = "u_n"
 u_n.interpolate(initial_condition)
@@ -74,6 +78,7 @@ num_steps = int(np.ceil(T/dt))
 Cvel = 0.25
 CRV = 4.0
 
+rv = RV(Cvel, CRV, domain)
 
 # Create boundary condition
 fdim = domain.topology.dim - 1
@@ -82,7 +87,7 @@ boundary_facets = mesh.locate_entities_boundary(
 bc = fem.dirichletbc(PETSc.ScalarType(np.pi/4), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
 # Time-dependent output
-xdmf = io.XDMFFile(domain.comm, "Code/Nonlinear/KPP/Output/testing.xdmf", "w")
+xdmf = io.XDMFFile(domain.comm, location_data + '/KPP_RV.xdmf', "w")
 xdmf.write_mesh(domain)
 
 # Define solution variable, and interpolate initial solution for visualization in Paraview
@@ -113,7 +118,7 @@ if PLOT:
     grid = pyvista.UnstructuredGrid(*plot.vtk_mesh(V))
 
     plotter = pyvista.Plotter()
-    plotter.open_gif("Code/Nonlinear/KPP/Output/KPP.gif", fps=10)
+    plotter.open_gif(location_fig+"/KPP.gif", fps=10)
 
     grid.point_data["uh"] = uh.x.array
     warped = grid.warp_by_scalar("uh", factor=1)
@@ -172,12 +177,6 @@ xdmf.write_function(uh, t)
 for i in range(num_steps -1):
     t += dt
 
-    
-    # a_R = u*v*ufl.dx
-    # L_R = 1/dt*u_n * v * ufl.dx - 1/dt* u_old * v *ufl.dx + ufl.dot(velocity_field(u_n),ufl.grad(u_n))* v * ufl.dx
-    # F_R = (a_R - L_R)
-
-
     F_R = (RH*v*ufl.dx - 1/dt*u_n*v *ufl.dx + 1/dt*u_old*v*ufl.dx -
         0.5*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx -
         0.5*ufl.dot(velocity_field(u_old), ufl.grad(u_old))*v*ufl.dx)
@@ -191,20 +190,10 @@ for i in range(num_steps -1):
     Rh_problem.report = True
 
     n, converged = Rh_problem.solve(RH)
-    # n, converged = Rh.solve(uh)
-    # assert (converged)
-    RH.x.array[:] = RH.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
-    epsilon = fem.Function(V)
 
-    for node in range(RH.x.array.size):
-        hi = h_CG.x.array[node]
-        Ri = RH.x.array[node]
-        w = uh.x.array[node]
-        w = velocity_field(uh.x.array[node])
-        fi = np.array(w, dtype = 'float')
-        fi_norm = np.linalg.norm(fi)
-        epsilon.x.array[node] = min(Cvel * hi * fi_norm, CRV * hi ** 2 * np.abs(Ri))
-    
+    RH.x.array[:] = RH.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
+    epsilon = rv.get_epsilon(uh, velocity_field, RH, h_CG)
+ 
     F = (uh*v *ufl.dx - u_n*v *ufl.dx + 
         0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
         0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx + 
@@ -214,7 +203,7 @@ for i in range(num_steps -1):
     problem = NonlinearProblem(F, uh, bcs = [bc])
     solver = NewtonSolver(MPI.COMM_WORLD, problem)
     solver.max_it = 100  # Increase maximum number of iterations
-    solver.rtol =  1e-1
+    solver.rtol =  1e-4
     solver.report = True
 
     # Solve linear problem
@@ -238,3 +227,7 @@ if PLOT:
     plotter.close()
 xdmf.close()
 
+
+
+pde.plot_pv_2d(domain, 100, epsilon, 'Espilon', 'epsilon_2d', location=location_fig)
+pde.plot_pv_2d(domain, 100, RH, 'RH', 'rh_2d', location=location_fig)

@@ -22,3 +22,5 @@ class RV:
             fi = np.array(w, dtype = 'float')
             fi_norm = np.linalg.norm(fi)
             epsilon.x.array[node] = min(self.Cvel * hi * fi_norm, self.Crv * hi ** 2 * np.abs(Ri))
+
+        return epsilon
