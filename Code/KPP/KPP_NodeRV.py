@@ -23,7 +23,7 @@ location_fig = os.path.join(script_dir, 'Figures/RV') # location = './Figures'
 location_data = os.path.join(script_dir, 'Data') # location = './Figures'
 
 pde = PDE_plot()
-PLOT = False
+PLOT = True
 gmsh.initialize()
 
 membrane = gmsh.model.occ.addRectangle(-2,-2,0,4,4)
@@ -75,8 +75,8 @@ t = 0  # Start time
 T = 1.0  # Final time
 dt = 0.01
 num_steps = int(np.ceil(T/dt))
-Cvel = 0.25
-CRV = 4.0
+Cvel = 0.5
+CRV = 10
 
 rv = RV(Cvel, CRV, domain)
 
