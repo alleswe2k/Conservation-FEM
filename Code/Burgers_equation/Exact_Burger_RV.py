@@ -21,7 +21,7 @@ location_figures = os.path.join(script_dir, 'Figures/RV') # location = './Figure
 location_data = os.path.join(script_dir, 'Data/RV') # location = './Data'
 
 pde = PDE_plot()
-PLOT = True
+PLOT = False
 mesh_size = 100
 
 domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [mesh_size, mesh_size], cell_type=mesh.CellType.triangle)
@@ -104,7 +104,7 @@ t = 0  # Start time
 T = 0.5 # Final time
 dt = 0.01
 num_steps = int(np.ceil(T/dt))
-Cvel = 0.25
+Cvel = 0.5
 CRV = 10.0
 
 rv = RV(Cvel, CRV, domain)
@@ -240,8 +240,8 @@ pde.plot_pv_2d(domain, mesh_size, epsilon, 'Espilon', 'E_epsilon_2D', location_f
 pde.plot_pv_2d(domain, mesh_size, RH, 'RH', 'E_Rh_2D', location_figures)
 pde.plot_pv_2d(domain, mesh_size, u_n, 'u_n', 'E_sol_2D', location_figures)
 pde.plot_pv_2d(domain, mesh_size, u_exact, 'u_exact', 'E_u_exact_2D', location_figures)
-for Rh in RH.x.array:
-    print(Rh)
+# for Rh in RH.x.array:
+#     print(Rh)
 
 print(f'Error: {np.abs(u_exact.x.array - uh.x.array)}')
 
