@@ -12,13 +12,18 @@ from dolfinx.io import gmshio
 from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, LinearProblem
 
+from Utils.PDE_plot import PDE_plot
+
 import os
 script_dir = os.path.dirname(os.path.abspath(__file__))
 location_figures = os.path.join(script_dir, 'Figures/RV')
 location_data = os.path.join(script_dir, 'Data/RV/solution.xdmf')
 
+pde = PDE_plot()
+fraction = 16
+hmax = 1/fraction # 0.05 in example
 # Enable or disable real-time plotting
-PLOT = True
+PLOT = False
 # Creating mesh
 gmsh.initialize()
 
@@ -28,7 +33,7 @@ gmsh.model.occ.synchronize()
 gdim = 2
 gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
-hmax = 1/16 # 0.05 in example
+
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
 gmsh.model.mesh.generate(gdim)
@@ -260,3 +265,6 @@ xdmf.close()
 error_L2 = np.sqrt(domain.comm.allreduce(fem.assemble_scalar(fem.form((uh - u_ex)**2 * ufl.dx)), op=MPI.SUM))
 if domain.comm.rank == 0:
     print(f"L2-error: {error_L2:.2e}")
+
+pde.plot_pv_2d(domain, fraction, epsilon, 'Epsilon', 'epsilon_2d', location=location_figures)
+pde.plot_pv_3d(domain, fraction, Rh, 'Rh', 'rv', location=location_figures)

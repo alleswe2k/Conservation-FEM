@@ -262,8 +262,10 @@ for i in tqdm(range(num_steps-1)):
         warped.point_data["uh"][:] = uh.x.array
         plotter.write_frame()
 
-pde.plot_pv_2d(domain, 8, uh, 'Uh', 'RV_UH_2D', location_figures)
-pde.plot_pv_2d(domain, 8, RH, 'Rh', 'RV_RH_2d', location_figures)
+
+
+pde.plot_pv_3d(domain, 8, uh, 'Uh', 'RV_UH_2D', location_figures)
+pde.plot_pv_3d(domain, 8, RH, 'Rh', 'RV_RH_2d', location_figures)
 
 # pde.plot_pv_3d(domain, mesh_size, u_exact, "exact_solution", "E_exact_solution_3D", location_figures)
 # pde.plot_pv_3d(domain, mesh_size, u_initial, "exact_initial", "E_exact_initial_3D", location_figures)
