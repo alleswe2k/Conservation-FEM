@@ -21,7 +21,7 @@ location_figures = os.path.join(script_dir, 'Figures/RV') # location = './Figure
 location_data = os.path.join(script_dir, 'Data/RV') # location = './Data'
 
 pde = PDE_plot()
-PLOT = True
+PLOT = False
 mesh_size = 100
 
 domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [mesh_size, mesh_size], cell_type=mesh.CellType.triangle)
