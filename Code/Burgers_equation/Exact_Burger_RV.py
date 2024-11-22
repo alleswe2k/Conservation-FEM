@@ -117,8 +117,6 @@ u_exact_boundary.interpolate(exact_solution)
 fdim = domain.topology.dim - 1
 boundary_facets = mesh.locate_entities_boundary(
     domain, fdim, lambda x: np.full(x.shape[1], True, dtype=bool))
-# # bc = fem.dirichletbc(PETSc.ScalarType(np.pi/4), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
-# bc = fem.dirichletbc(u_exact_boundary, fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
 # Locate boundary degrees of freedom
 boundary_dofs = fem.locate_dofs_topological(V, fdim, boundary_facets)
@@ -153,7 +151,7 @@ if PLOT:
     sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
                 position_x=0.1, position_y=0.8, width=0.8, height=0.1)
 
-    renderer = plotter.add_mesh(warped, show_edges=False, lighting=False,
+    renderer = plotter.add_mesh(warped, show_edges=True, lighting=False,
                                 cmap=viridis, scalar_bar_args=sargs,
                                 clim=[0, max(uh.x.array)])
     
@@ -224,7 +222,7 @@ for i in tqdm(range(num_steps)):
     u_n.x.array[:] = uh.x.array
 
     # Write solution to file
-    # xdmf.write_function(uh, t)
+    xdmf.write_function(uh, t)
     # Update plot
     if PLOT:
         new_warped = grid.warp_by_scalar("uh", factor=1)
