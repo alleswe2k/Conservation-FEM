@@ -75,7 +75,7 @@ t = 0  # Start time
 T = 1.0  # Final time
 dt = 0.01
 num_steps = int(np.ceil(T/dt))
-Cvel = 0.25
+Cvel = 0.5
 CRV = 4.0
 
 rv = RV(Cvel, CRV, domain)
