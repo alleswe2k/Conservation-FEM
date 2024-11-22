@@ -64,8 +64,8 @@ t = 0  # Start time
 T = 0.5 # Final time
 dt = 0.01
 num_steps = int(np.ceil(T/dt))
-Cvel = 0.25
-CRV = 4.0
+Cvel = 1
+CRV = np.inf
 
 rv = RV(Cvel, CRV, domain)
 

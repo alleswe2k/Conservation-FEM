@@ -9,7 +9,7 @@ import numpy as np
 from dolfinx import plot
 
 class PDE_plot():
-    def __setup_plot(self, domain, vector, title):
+    def __setup_plot(self, domain, vector, scale_factor, title):
         tdim = domain.topology.dim
         os.environ["PYVISTA_OFF_SCREEN"] = "True"
         #pv.start_xvfb()
@@ -19,15 +19,16 @@ class PDE_plot():
         grid = pv.UnstructuredGrid(topology, cell_types, geometry)
 
         grid.point_data[title] = vector.x.array
-        warped = grid.warp_by_scalar(title, factor=1)
+        warped = grid.warp_by_scalar(title, factor=scale_factor)  # Use a smaller factor if values are small
+
 
         color_map = mpl.colormaps.get_cmap("viridis").resampled(25)
 
         return plotter, warped, color_map
 
-    def plot_pv_3d(self, domain, mesh_size, vector, title, filename, location=""):
+    def plot_pv_3d(self, domain, mesh_size, vector, title, filename, location="", scale_factor=1):
         pv.global_theme.colorbar_orientation = 'horizontal'
-        plotter, warped, color_map = self.__setup_plot(domain, vector, title)
+        plotter, warped, color_map = self.__setup_plot(domain, vector, scale_factor, title)
 
         sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
                 position_x=0.1, position_y=0.8, width=0.8, height=0.1)
@@ -39,10 +40,10 @@ class PDE_plot():
         plotter.screenshot(f"{location}/{filename}_{mesh_size}.png")  # Saves the plot as a PNG file
     
 
-    def plot_pv_2d(self, domain, mesh_size, vector, title, filename, location=""):
+    def plot_pv_2d(self, domain, mesh_size, vector, title, filename, location="", scale_factor=0.1):
 
         pv.global_theme.colorbar_orientation = 'vertical'
-        plotter, warped, color_map = self.__setup_plot(domain, vector, title)       
+        plotter, warped, color_map = self.__setup_plot(domain, vector, scale_factor, title)       
 
 
         sargs = {
@@ -59,11 +60,11 @@ class PDE_plot():
 
         plotter.add_mesh(
             warped,
-            show_edges=False, 
+            show_edges=True, 
             lighting=False,
             cmap=color_map,
             scalar_bar_args=sargs,
-            clim=[min(vector.x.array), max(vector.x.array)])
+            clim=[0, max(vector.x.array)])
         plotter.view_xy()
         # Take a screenshot
         plotter.screenshot(f"{location}/{filename}_{mesh_size}.png")  # Saves the plot as a PNG file
@@ -96,3 +97,5 @@ class PDE_plot():
         plt.savefig(f'{location}/{filename}.png')
         plt.show()
 
+
+           
