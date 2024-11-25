@@ -49,16 +49,17 @@ class SI:
                 # print(A.getValue(node, adj_node))
                 beta = stiffness_matrix.getValue(node, adj_node)
                 # beta = 1
-                numerator += beta * (delta_u)
+                numerator += beta * delta_u
                 denominator += np.abs(beta) * np.abs(delta_u)
 
             eps = 1e-8 * G_max
             # print(max(denominator, eps, 1e-4))
-            # if max(denominator, eps) == 0:
+            # if max(denominator, eps) == 0 or np.abs(numerator) < 1e-1:
             #     alpha = 0
             # else:
             #     alpha = np.abs(numerator) / max(denominator, eps)
-            alpha = np.abs(numerator) / max(denominator, eps, 1e-2)
+            alpha = np.abs(numerator) / max(denominator, eps)
+            print(alpha, ":", np.abs(numerator), ":", 1/max(denominator, eps))
             # print(alpha, self.Cm, hi, fi_norm)
             epsilon.x.array[node] = alpha * self.Cm * hi * fi_norm
             # alphas.append(alpha)

@@ -56,7 +56,7 @@ DG0 = fem.functionspace(domain, ("DG", 0))
 # def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
 #     return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
 def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
-    return (x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2
+    return ((x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2) * 14*np.pi + ((x[0] - x0_1)**2 + (x[1] - x0_2)**2 > r0**2) * np.pi / 4
 
 def velocity_field(x):
     return np.array([-2*np.pi*x[1], 2*np.pi*x[0]])
@@ -93,7 +93,7 @@ si = SI(Cm, domain)
 fdim = domain.topology.dim - 1
 boundary_facets = mesh.locate_entities_boundary(
     domain, fdim, lambda x: np.full(x.shape[1], True, dtype=bool))
-bc = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
+bc = fem.dirichletbc(PETSc.ScalarType(np.pi/4), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
 # Time-dependent output
 xdmf = io.XDMFFile(domain.comm, location_data, "w")
@@ -141,7 +141,7 @@ a_stiffness = ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
 stiffness_matrix = assemble_matrix(fem.form(a_stiffness), bcs=[bc])
 stiffness_matrix.assemble()
 
-epsilon = si.get_epsilon_linear(w, node_patches, h_CG, uh, stiffness_matrix)
+epsilon = fem.Function(V)
 
 # Visualization of time dep. problem using pyvista
 pde_realtime_plot = PDE_realtime_plot(location_figures, uh, epsilon, V)
@@ -152,6 +152,11 @@ for i in range(num_steps):
 
     # print(max(epsilon.x.array), min(epsilon.x.array))
     epsilon = si.get_epsilon_linear(w, node_patches, h_CG, u_n, stiffness_matrix)
+
+     # Update plot
+    pde_realtime_plot.update_plot(uh, epsilon)
+    input()
+
     a = u * v * ufl.dx + 0.5 * dt * ufl.dot(w, ufl.grad(u)) * v * ufl.dx + 0.5 * epsilon * dt * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
     L = u_n * v * ufl.dx - 0.5 * dt * ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx - 0.5 * epsilon * dt * ufl.dot(ufl.grad(u_n), ufl.grad(v)) * ufl.dx
 
@@ -184,9 +189,6 @@ for i in range(num_steps):
 
     # Write solution to file
     xdmf.write_function(uh, t)
-    # Update plot
-    pde_realtime_plot.update_plot(uh, epsilon)
-    # input()
 
 pde_realtime_plot.close()
 xdmf.close()

@@ -46,7 +46,7 @@ DG1 = fem.functionspace(domain, ("DG", 1))
 
 def initial_condition(x):
     # return np.where(x[0]**2 + x[1]**2 <= 1,  14 *np.pi / 4, np.pi / 4)
-    return (x[0]**2 + x[1]**2 <= 1) * 14*np.pi/4 + (x[0]**2 + x[1]**2 > 1) * 0
+    return (x[0]**2 + x[1]**2 <= 1) * 14*np.pi/4 + (x[0]**2 + x[1]**2 > 1) * np.pi/4
 
 def velocity_field(u):
     # Apply nonlinear operators correctly to the scalar function u
