@@ -10,7 +10,8 @@ from dolfinx import plot
 
 class PDE_plot():
     def __init__(self):
-        self.started_anim = False
+        self.anim_started = False
+
 
     def __setup_plot(self, domain, vector, title):
         tdim = domain.topology.dim
@@ -38,7 +39,17 @@ class PDE_plot():
         color_map = mpl.colormaps.get_cmap("viridis").resampled(25)
 
         return plotter, warped, color_map
+    
+    def __calc_scale_factor(self, grid, title):
+            desired_max_height = 1
+            scalar_field = grid[title]
+            scalar_range = scalar_field.max() - scalar_field.min()
 
+            if scalar_range > 0:
+                scale_factor = desired_max_height / scalar_range
+            else:
+                scale_factor = 1.0
+            return scale_factor
 
     def plot_pv_3d(self, domain, mesh_size, vector, title, filename, location=""):
         pv.global_theme.colorbar_orientation = 'horizontal'
@@ -110,3 +121,42 @@ class PDE_plot():
         # Save the plot
         plt.savefig(f'{location}/{filename}.png')
         plt.show()
+
+    
+    def animation(self, domain, mesh_size, vector, title, filename, location="", plot_2d=False):
+        if not self.anim_started:
+            tdim = domain.topology.dim
+            domain.topology.create_connectivity(tdim, tdim)
+            topology, cell_types, geometry = plot.vtk_mesh(domain, tdim)
+            self.anim_grid = pv.UnstructuredGrid(topology, cell_types, geometry)
+
+
+            self.anim_plotter = pv.Plotter()
+            self.anim_plotter.open_gif(f"{filename}_{mesh_size}.gif", fps=10)
+
+            self.anim_grid.point_data[title] = vector.x.array
+
+            scale_factor = self.__calc_scale_factor(self.anim_grid, title)
+
+            self.anim_warped = self.anim_grid.warp_by_scalar(title, factor=scale_factor)
+
+            color_map = mpl.colormaps.get_cmap("viridis").resampled(25)
+            sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
+                    position_x=0.1, position_y=0.8, width=0.8, height=0.1)
+
+            renderer = self.anim_plotter.add_mesh(self.anim_warped, show_edges=True, lighting=False,
+                                    cmap=color_map, scalar_bar_args=sargs,
+                                    clim=[min(vector.x.array), max(vector.x.array)])
+            
+            self.anim_plotter.view_xy()
+            self.anim_started = True
+
+        scale_factor = self.__calc_scale_factor(self.anim_grid, title)
+        new_warped = self.anim_grid.warp_by_scalar(title, factor=scale_factor)
+        self.anim_warped.points[:, :] = new_warped.points
+        self.anim_warped.point_data[title][:] = vector.x.array
+        self.anim_plotter.write_frame()
+
+    def stop_anim(self):
+        self.anim_plotter.close()
+

@@ -1,8 +1,13 @@
+import matplotlib as mpl
+import pyvista
 import ufl
 import numpy as np
 
 from petsc4py import PETSc
 from mpi4py import MPI
+
+import gmsh
+from dolfinx.io import gmshio
 
 from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, LinearProblem
@@ -12,38 +17,83 @@ from Utils.PDE_plot import PDE_plot
 import os
 script_dir = os.path.dirname(os.path.abspath(__file__))
 location_figures = os.path.join(script_dir, 'Figures/RV')
+location_data = os.path.join(script_dir, 'Data/RV/solution.xdmf')
 
-fraction = 16
-
-hmax = 1/fraction
 pde = PDE_plot()
-domain = pde.create_mesh_unit_disk(hmax)
+fraction = 16
+hmax = 1/fraction # 0.05 in example
+# Enable or disable real-time plotting
+# Creating mesh
+gmsh.initialize()
+
+membrane = gmsh.model.occ.addDisk(0, 0, 0, 1, 1)
+gmsh.model.occ.synchronize()
+
+gdim = 2
+gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
+
+
+gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
+gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
+gmsh.model.mesh.generate(gdim)
+
+gmsh_model_rank = 0
+mesh_comm = MPI.COMM_WORLD
+domain, cell_markers, facet_markers = gmshio.model_to_mesh(gmsh.model, mesh_comm, gmsh_model_rank, gdim=gdim)
 
 V = fem.functionspace(domain, ("Lagrange", 1))
+# domain.geometry.dim = (2, )
 W = fem.functionspace(domain, ("Lagrange", 1, (domain.geometry.dim, ))) # Lagrange 2 in documentation
 DG0 = fem.functionspace(domain, ("DG", 0))
-DG1 = fem.functionspace(domain, ("DG", 1))
 
+# def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
+#     return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
 def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
     return (x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2
 
 def velocity_field(x):
     return np.array([-2*np.pi*x[1], 2*np.pi*x[0]])
 
-u_n = pde.create_vector(V, 'u_n', initial_condition)
-u_old = pde.create_vector(V, 'u_old', initial_condition)
-u_ex = pde.create_vector(V, 'u_ex', initial_condition)
-w = pde.create_vector(W, 'w', velocity_field)
-uh = pde.create_vector(V, 'uh', initial_condition)
+u_n = fem.Function(V)
+u_n.name = "u_n"
+u_n.interpolate(initial_condition)
 
+u_old = fem.Function(V)
+u_old.name = "u_old"
+u_old.interpolate(initial_condition)
+
+u_ex = fem.Function(V)
+u_ex.interpolate(initial_condition)
+
+# velocity field f_prim
+w = fem.Function(W)
+w.name = "w"
+w.interpolate(velocity_field)
+
+w_values = w.x.array.reshape((-1, domain.geometry.dim))
+w_inf_norm = np.linalg.norm(w_values, ord=np.inf)
+
+# Define temporal parameters
 CFL = 0.5
+t = 0  # Start time
+T = 1.0  # Final time
+dt = CFL*hmax/w_inf_norm
+num_steps = int(np.ceil(T/dt))
 Cvel = 0.25
 CRV = 1.0
-T = 1.0
-t = 0.0
 
-dt, num_steps = pde.get_time_steps(domain, w, CFL, T, hmax)
-bc = pde.boundary_condition(domain, V)
+# Create boundary condition
+fdim = domain.topology.dim - 1
+boundary_facets = mesh.locate_entities_boundary(
+    domain, fdim, lambda x: np.full(x.shape[1], True, dtype=bool))
+bc = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
+
+
+# Define solution variable, and interpolate initial solution for visualization in Paraview
+uh = fem.Function(V)
+uh.name = "uh"
+uh.interpolate(initial_condition)
+# xdmf.write_function(uh, t)
 
 # Variational problem and solver
 u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
@@ -61,7 +111,13 @@ A = assemble_matrix(bilinear_form, bcs=[bc])
 A.assemble()
 b = create_vector(linear_form)
 
-solver = pde.create_solver_linear(domain, A)
+# Can no longer use LinearProblem to solve since we already
+# assembled a into matrix A. Therefore, create linear algebra solver with petsc4py
+solver = PETSc.KSP().create(domain.comm)
+solver.setOperators(A)
+solver.setType(PETSc.KSP.Type.PREONLY)
+solver.getPC().setType(PETSc.PC.Type.LU)
+
 
 """ First, project hk in DG(0) on h_h in Lagrange(1) """
 h_DG = fem.Function(DG0)  # Cell-based function for hk values
@@ -82,12 +138,14 @@ for cell in range(num_cells):
 
 h_DG.x.array[:] = hk_values
 
+v = ufl.TestFunction(V)
+
 h_trial = ufl.TrialFunction(V)
 a_h = h_trial * v * ufl.dx
 L_h = h_DG * v * ufl.dx
 
 # Solve linear system
-problem = LinearProblem(a_h, L_h,petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+problem = LinearProblem(a_h, L_h, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
 h_CG = problem.solve() # returns dolfinx.fem.Function
 
 """ Take on GFEM step for residual calculation """
@@ -110,6 +168,8 @@ uh.x.scatter_forward()
 # Update solution at previous time step (u_n)
 u_n.x.array[:] = uh.x.array
 
+
+
 # """ Then time loop """
 for i in range(num_steps-1):
     t += dt
@@ -118,7 +178,7 @@ for i in range(num_steps-1):
     L_R = 1/dt * u_n * v * ufl.dx - 1/dt * u_old * v * ufl.dx + ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx
 
     # Solve linear system
-    problem = LinearProblem(a_R, L_R, bcs=[bc], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+    problem = LinearProblem(a_R, L_R, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
     Rh = problem.solve() # returns dolfinx.fem.Function
     Rh.x.array[:] = Rh.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
 
@@ -165,5 +225,8 @@ for i in range(num_steps-1):
     # Update solution at previous time step (u_n)
     u_n.x.array[:] = uh.x.array
 
-pde.plot_pv_2d(domain, fraction, epsilon, 'Epsilon', 'epsilon_2d', location=location_figures)
-pde.plot_pv_3d(domain, fraction, Rh, 'Rh', 'rv', location=location_figures)
+    pde.animation(domain, fraction, epsilon, 'Epsilon', 'epsilon_anim')
+
+print("Done!")
+pde.stop_anim()
+
