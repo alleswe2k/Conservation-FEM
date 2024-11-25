@@ -15,6 +15,9 @@ from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, LinearProblem
 
 from Utils.PDE_plot import PDE_plot
+from Utils.PDE_realtime_plot import PDE_realtime_plot
+from Utils.SI import SI
+from Utils.helpers import get_nodal_h
 
 import os
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -25,7 +28,7 @@ pde = PDE_plot()
 # print(PETSc.ScalarType)
 
 # Enable or disable real-time plotting
-PLOT = False
+PLOT = True
 # Creating mesh
 gmsh.initialize()
 
@@ -35,7 +38,7 @@ gmsh.model.occ.synchronize()
 gdim = 2
 gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
-fraction = 8
+fraction = 32
 hmax = 1/fraction # 0.05 in example
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
@@ -49,7 +52,6 @@ V = fem.functionspace(domain, ("Lagrange", 1))
 # domain.geometry.dim = (2, )
 W = fem.functionspace(domain, ("Lagrange", 1, (domain.geometry.dim, ))) # Lagrange 2 in documentation
 DG0 = fem.functionspace(domain, ("DG", 0))
-DG1 = fem.functionspace(domain, ("DG", 1))
 
 # def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
 #     return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
@@ -62,10 +64,6 @@ def velocity_field(x):
 u_n = fem.Function(V)
 u_n.name = "u_n"
 u_n.interpolate(initial_condition)
-
-u_old = fem.Function(V)
-u_old.name = "u_old"
-u_old.interpolate(initial_condition)
 
 u_ex = fem.Function(V)
 u_ex.interpolate(initial_condition)
@@ -87,8 +85,9 @@ t = 0  # Start time
 T = 1.0  # Final time
 dt = CFL*hmax/w_inf_norm
 num_steps = int(np.ceil(T/dt))
-Cvel = 0.25
 Cm = 0.5
+
+si = SI(Cm, domain)
 
 # Create boundary condition
 fdim = domain.topology.dim - 1
@@ -129,132 +128,30 @@ solver.setOperators(A)
 solver.setType(PETSc.KSP.Type.PREONLY)
 solver.getPC().setType(PETSc.PC.Type.LU)
 
-# Visualization of time dep. problem using pyvista
-if PLOT:
-    # pyvista.start_xvfb()
-
-    grid = pyvista.UnstructuredGrid(*plot.vtk_mesh(V))
-
-    plotter = pyvista.Plotter()
-    plotter.open_gif("smoothness.gif", fps=10)
-
-    grid.point_data["uh"] = uh.x.array
-    warped = grid.warp_by_scalar("uh", factor=1)
-
-    viridis = mpl.colormaps.get_cmap("viridis").resampled(25)
-    sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
-                position_x=0.1, position_y=0.8, width=0.8, height=0.1)
-
-    renderer = plotter.add_mesh(warped, show_edges=True, lighting=False,
-                                cmap=viridis, scalar_bar_args=sargs,
-                                clim=[0, max(uh.x.array)])
 
 """ First, project hk in DG(0) on h_h in Lagrange(1) """
-h_DG = fem.Function(DG0)  # Cell-based function for hk values
-
-cell_to_vertex_map = domain.topology.connectivity(domain.topology.dim, 0)
-vertex_coords = domain.geometry.x
-
-num_cells = domain.topology.index_map(domain.topology.dim).size_local
-hk_values = np.zeros(num_cells)
-
-for cell in range(num_cells):
-    # Get the vertices of the current cell
-    cell_vertices = cell_to_vertex_map.links(cell)
-    coords = vertex_coords[cell_vertices]  # Coordinates of the vertices
-    
-    edges = [np.linalg.norm(coords[i] - coords[j]) for i in range(len(coords)) for j in range(i + 1, len(coords))]
-    hk_values[cell] = min(edges) 
-
-h_DG.x.array[:] = hk_values
-
-v = ufl.TestFunction(V)
-
-h_trial = ufl.TrialFunction(V)
-a_h = h_trial * v * ufl.dx
-L_h = h_DG * v * ufl.dx
-
-# Solve linear system
-problem = LinearProblem(a_h, L_h, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-h_CG = problem.solve() # returns dolfinx.fem.Function
+h_CG = get_nodal_h(domain)
 
 """ Creat patch dictionary """
 # Dictionary to store adjacent nodes for each node
-node_patches = {}
-
-# Loop over each cell to build node adjacency information
-for cell in range(domain.topology.index_map(domain.topology.dim).size_local):
-    cell_nodes = V.dofmap.cell_dofs(cell)
-    for node in cell_nodes:
-        if node not in node_patches:
-            node_patches[node] = set()
-        # Add all other nodes in this cell to the patch of the current node
-        # node_patches[node].update(n for n in cell_nodes if n != node)
-        node_patches[node].update(n for n in cell_nodes)
+node_patches = si.get_patch_dictionary()
 
 """ Assemble stiffness matrix, obtain element values """
-a = ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
-A = assemble_matrix(fem.form(a), bcs=[bc])
-A.assemble()
+a_stiffness = ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
+stiffness_matrix = assemble_matrix(fem.form(a_stiffness), bcs=[bc])
+stiffness_matrix.assemble()
 
-""" Take on GFEM step for residual calculation """
-t += dt
+epsilon = si.get_epsilon_linear(w, node_patches, h_CG, uh, stiffness_matrix)
 
-# Update the right hand side reusing the initial vector
-with b.localForm() as loc_b:
-    loc_b.set(0)
-assemble_vector(b, linear_form)
-
-# Apply Dirichlet boundary condition to the vector
-apply_lifting(b, [bilinear_form], [[bc]])
-b.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
-set_bc(b, [bc])
-
-# Solve linear problem
-solver.solve(b, uh.x.petsc_vec)
-uh.x.scatter_forward()
-
-# Update solution at previous time step (u_n)
-u_n.x.array[:] = uh.x.array
-
-# Write solution to file
-xdmf.write_function(uh, t)
+# Visualization of time dep. problem using pyvista
+pde_realtime_plot = PDE_realtime_plot(location_figures, uh, epsilon, V)
 
 # """ Then time loop """
-for i in range(num_steps-1):
+for i in range(num_steps):
     t += dt
 
-    a_R = u * v * ufl.dx
-    L_R = 1/dt * u_n * v * ufl.dx - 1/dt * u_old * v * ufl.dx + ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx
-
-    # Solve linear system
-    problem = LinearProblem(a_R, L_R, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-    Rh = problem.solve() # returns dolfinx.fem.Function
-    Rh.x.array[:] = Rh.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
-
-    epsilon = fem.Function(V)
-
-    for node, adjacent_nodes in node_patches.items():
-        # node = i and adjacent_nodes (including self) = j
-        # print("Node:", node, " - Adjacent nodes:", adjacent_nodes)
-        hi = h_CG.x.array[node]
-        w_values = w.x.array.reshape((-1, domain.geometry.dim))
-        fi = w_values[node]
-        fi_norm = np.linalg.norm(fi)
-
-        numerator = 0
-        denominator = 0
-        for adj_node in adjacent_nodes:
-            # print(adj_node)
-            # print(A.getValue(node, adj_node))
-            beta = A.getValue(node, adj_node)
-            numerator += beta * (u_n.x.array[adj_node] - u_n.x.array[node])
-            denominator += np.abs(beta) * np.abs(u_n.x.array[adj_node] - u_n.x.array[node])
-
-        alpha = np.abs(numerator) / max(denominator, 1e-8)
-        # print('Numerator:', np.abs(numerator), ' - Denominator:', denominator, ' - Alpha:', alpha)
-        epsilon.x.array[node] = alpha * Cm * hi * fi_norm
-
+    # print(max(epsilon.x.array), min(epsilon.x.array))
+    epsilon = si.get_epsilon_linear(w, node_patches, h_CG, uh, stiffness_matrix)
     a = u * v * ufl.dx + 0.5 * dt * ufl.dot(w, ufl.grad(u)) * v * ufl.dx + 0.5 * epsilon * dt * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
     L = u_n * v * ufl.dx - 0.5 * dt * ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx - 0.5 * epsilon * dt * ufl.dot(ufl.grad(u_n), ufl.grad(v)) * ufl.dx
 
@@ -262,7 +159,6 @@ for i in range(num_steps-1):
     bilinear_form = fem.form(a)
     linear_form = fem.form(L)
 
-    # A does not change through time, but b does
     A = assemble_matrix(bilinear_form, bcs=[bc])
     A.assemble()
     b = create_vector(linear_form)
@@ -283,22 +179,16 @@ for i in range(num_steps-1):
     solver.solve(b, uh.x.petsc_vec)
     uh.x.scatter_forward()
 
-    # Save previous solution
-    u_old.x.array[:] = u_n.x.array
     # Update solution at previous time step (u_n)
     u_n.x.array[:] = uh.x.array
 
     # Write solution to file
     xdmf.write_function(uh, t)
     # Update plot
-    if PLOT:
-        new_warped = grid.warp_by_scalar("uh", factor=1)
-        warped.points[:, :] = new_warped.points
-        warped.point_data["uh"][:] = uh.x.array
-        plotter.write_frame()
+    pde_realtime_plot.update_plot(uh, epsilon)
+    input()
 
-if PLOT:
-    plotter.close()
+pde_realtime_plot.close()
 xdmf.close()
 
 error_L2 = np.sqrt(domain.comm.allreduce(fem.assemble_scalar(fem.form((uh - u_ex)**2 * ufl.dx)), op=MPI.SUM))
@@ -306,4 +196,3 @@ if domain.comm.rank == 0:
     print(f"L2-error: {error_L2:.2e}")
 
 pde.plot_pv_2d(domain, fraction, epsilon, 'Epsilon', 'epsilon_2d', location=location_figures)
-pde.plot_pv_3d(domain, fraction, Rh, 'Rh', 'rv', location=location_figures)

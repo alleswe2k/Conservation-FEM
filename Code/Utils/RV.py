@@ -9,6 +9,21 @@ class RV:
         self.Crv = Crv
         self.domain = domain
 
+    def get_epsilon_linear(self, w, residual, h):
+        V = fem.functionspace(self.domain, ("Lagrange", 1))
+        epsilon = fem.Function(V)
+        
+        # TODO: use num_nodes instead of residual.x.array.size
+        for node in range(residual.x.array.size):
+            hi = h.x.array[node]
+            Ri = residual.x.array[node]
+            w_values = w.x.array.reshape((-1, self.domain.geometry.dim))
+            fi = w_values[node]
+            fi_norm = np.linalg.norm(fi)
+            epsilon.x.array[node] = min(self.Cvel * hi * fi_norm, self.Crv * hi ** 2 * np.abs(Ri))
+        
+        return epsilon
+    
     def get_epsilon(self, uh, velocity_field, residual, h):
         V = fem.functionspace(self.domain, ("Lagrange", 1))
         epsilon = fem.Function(V)

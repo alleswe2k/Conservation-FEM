@@ -12,6 +12,9 @@ from dolfinx.io import gmshio
 from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, LinearProblem
 
+from Utils.helpers import get_nodal_h
+from Utils.RV import RV
+
 import os
 script_dir = os.path.dirname(os.path.abspath(__file__))
 location_figures = os.path.join(script_dir, 'Figures/RV')
@@ -28,7 +31,7 @@ gmsh.model.occ.synchronize()
 gdim = 2
 gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
-hmax = 1/16 # 0.05 in example
+hmax = 1/32 # 0.05 in example
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
 gmsh.model.mesh.generate(gdim)
@@ -76,7 +79,9 @@ T = 1.0  # Final time
 dt = CFL*hmax/w_inf_norm
 num_steps = int(np.ceil(T/dt))
 Cvel = 0.25
-CRV = 1.0
+CRV = 4.0
+
+rv = RV(Cvel, CRV, domain)
 
 # Create boundary condition
 fdim = domain.topology.dim - 1
@@ -117,54 +122,8 @@ solver.setOperators(A)
 solver.setType(PETSc.KSP.Type.PREONLY)
 solver.getPC().setType(PETSc.PC.Type.LU)
 
-# Visualization of time dep. problem using pyvista
-if PLOT:
-    # pyvista.start_xvfb()
-
-    grid = pyvista.UnstructuredGrid(*plot.vtk_mesh(V))
-
-    plotter = pyvista.Plotter()
-    plotter.open_gif("RV_node.gif", fps=10)
-
-    grid.point_data["uh"] = uh.x.array
-    warped = grid.warp_by_scalar("uh", factor=1)
-
-    viridis = mpl.colormaps.get_cmap("viridis").resampled(25)
-    sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
-                position_x=0.1, position_y=0.8, width=0.8, height=0.1)
-
-    renderer = plotter.add_mesh(warped, show_edges=True, lighting=False,
-                                cmap=viridis, scalar_bar_args=sargs,
-                                clim=[0, max(uh.x.array)])
-
 """ First, project hk in DG(0) on h_h in Lagrange(1) """
-h_DG = fem.Function(DG0)  # Cell-based function for hk values
-
-cell_to_vertex_map = domain.topology.connectivity(domain.topology.dim, 0)
-vertex_coords = domain.geometry.x
-
-num_cells = domain.topology.index_map(domain.topology.dim).size_local
-hk_values = np.zeros(num_cells)
-
-for cell in range(num_cells):
-    # Get the vertices of the current cell
-    cell_vertices = cell_to_vertex_map.links(cell)
-    coords = vertex_coords[cell_vertices]  # Coordinates of the vertices
-    
-    edges = [np.linalg.norm(coords[i] - coords[j]) for i in range(len(coords)) for j in range(i + 1, len(coords))]
-    hk_values[cell] = min(edges) 
-
-h_DG.x.array[:] = hk_values
-
-v = ufl.TestFunction(V)
-
-h_trial = ufl.TrialFunction(V)
-a_h = h_trial * v * ufl.dx
-L_h = h_DG * v * ufl.dx
-
-# Solve linear system
-problem = LinearProblem(a_h, L_h, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-h_CG = problem.solve() # returns dolfinx.fem.Function
+h_CG = get_nodal_h(domain)
 
 """ Take on GFEM step for residual calculation """
 t += dt
@@ -189,6 +148,44 @@ u_n.x.array[:] = uh.x.array
 # Write solution to file
 xdmf.write_function(uh, t)
 
+epsilon = fem.Function(V)
+# Visualization of time dep. problem using pyvista
+if PLOT:
+    # pyvista.start_xvfb()
+
+    grid = pyvista.UnstructuredGrid(*plot.vtk_mesh(V))
+
+    plotter = pyvista.Plotter(off_screen=True)
+    plotter.open_gif(f"{location_figures}/RV_node.gif", fps=10)
+
+    grid.point_data["uh"] = uh.x.array
+    warped = grid.warp_by_scalar("uh", factor=1)
+
+    viridis = mpl.colormaps.get_cmap("viridis").resampled(25)
+    sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
+                position_x=0.1, position_y=0.8, width=0.8, height=0.1)
+
+    renderer = plotter.add_mesh(warped, show_edges=True, lighting=False,
+                                cmap=viridis, scalar_bar_args=sargs,
+                                clim=[0, max(uh.x.array)])
+    
+    # Configure 2D plotter for epsilon
+    plotter_epsilon = pyvista.Plotter(off_screen=False)
+    plotter_epsilon.open_gif("epsilon_2d.gif", fps=10)
+
+    grid_epsilon = pyvista.UnstructuredGrid(*plot.vtk_mesh(V))
+    grid_epsilon.point_data["epsilon"] = epsilon.x.array
+
+    viridis_epsilon = mpl.colormaps.get_cmap("viridis").resampled(25)
+    sargs_epsilon = dict(title="Epsilon", title_font_size=25, label_font_size=20, fmt="%.2e",
+                        color="black", position_x=0.1, position_y=0.8, width=0.8, height=0.1)
+
+    plotter_epsilon.add_mesh(grid_epsilon, show_edges=True, cmap=viridis_epsilon,
+                            scalar_bar_args=sargs_epsilon,
+                            clim=[np.min(epsilon.x.array), np.max(epsilon.x.array)])
+    
+    plotter_epsilon.view_xy()
+
 # """ Then time loop """
 for i in range(num_steps-1):
     t += dt
@@ -201,15 +198,7 @@ for i in range(num_steps-1):
     Rh = problem.solve() # returns dolfinx.fem.Function
     Rh.x.array[:] = Rh.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
 
-    epsilon = fem.Function(V)
-
-    for node in range(Rh.x.array.size):
-        hi = h_CG.x.array[node]
-        Ri = Rh.x.array[node]
-        w_values = w.x.array.reshape((-1, domain.geometry.dim))
-        fi = w_values[node]
-        fi_norm = np.linalg.norm(fi)
-        epsilon.x.array[node] = min(Cvel * hi * fi_norm, CRV * hi ** 2 * np.abs(Ri))
+    epsilon = rv.get_epsilon_linear(w, Rh, h_CG)
 
     a = u * v * ufl.dx + 0.5 * dt * ufl.dot(w, ufl.grad(u)) * v * ufl.dx + 0.5 * epsilon * dt * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
     L = u_n * v * ufl.dx - 0.5 * dt * ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx - 0.5 * epsilon * dt * ufl.dot(ufl.grad(u_n), ufl.grad(v)) * ufl.dx
@@ -251,6 +240,11 @@ for i in range(num_steps-1):
         new_warped = grid.warp_by_scalar("uh", factor=1)
         warped.points[:, :] = new_warped.points
         warped.point_data["uh"][:] = uh.x.array
+
+        grid_epsilon.point_data["epsilon"][:] = epsilon.x.array
+        plotter_epsilon.update_scalar_bar_range([np.min(epsilon.x.array), np.max(epsilon.x.array)])
+        plotter_epsilon.write_frame()
+
         plotter.write_frame()
 
 if PLOT:
