@@ -26,10 +26,10 @@ class SI:
         
         return node_patches
 
-    def get_epsilon_linear(self, w, node_patches, h_CG, u_n, A):
+    def get_epsilon_linear(self, w, node_patches, h_CG, u_n, stiffness_matrix):
         V = fem.functionspace(self.domain, ("Lagrange", 1))
         epsilon = fem.Function(V)
-        alphas = []
+        # alphas = []
 
         for node, adjacent_nodes in node_patches.items():
             # node = i and adjacent_nodes (including self) = j
@@ -41,20 +41,29 @@ class SI:
 
             numerator = 0
             denominator = 0
+            G_max = 0 # max |G_j|
             for adj_node in adjacent_nodes:
+                G_max = max(G_max, np.abs(u_n.x.array[adj_node]))
+                delta_u = u_n.x.array[adj_node] - u_n.x.array[node]
                 # print(adj_node)
                 # print(A.getValue(node, adj_node))
-                beta = A.getValue(node, adj_node)
+                beta = stiffness_matrix.getValue(node, adj_node)
                 # beta = 1
-                numerator += beta * (u_n.x.array[adj_node] - u_n.x.array[node])
-                denominator += np.abs(beta) * np.abs(u_n.x.array[adj_node] - u_n.x.array[node])
+                numerator += beta * (delta_u)
+                denominator += np.abs(beta) * np.abs(delta_u)
 
-            alpha = np.abs(numerator) / max(denominator, 1e-8)
-            # print('Numerator:', np.abs(numerator), ' - Denominator:', denominator, ' - Alpha:', alpha)
+            eps = 1e-8 * G_max
+            # print(max(denominator, eps, 1e-4))
+            # if max(denominator, eps) == 0:
+            #     alpha = 0
+            # else:
+            #     alpha = np.abs(numerator) / max(denominator, eps)
+            alpha = np.abs(numerator) / max(denominator, eps, 1e-2)
+            # print(alpha, self.Cm, hi, fi_norm)
             epsilon.x.array[node] = alpha * self.Cm * hi * fi_norm
-            alphas.append(alpha)
+            # alphas.append(alpha)
         
-        print(max(alphas), min(alphas))
+        # print(max(alphas), min(alphas))
         
         return epsilon
 

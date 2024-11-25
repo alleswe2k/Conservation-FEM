@@ -21,7 +21,7 @@ location_figures = os.path.join(script_dir, 'Figures/RV') # location = './Figure
 location_data = os.path.join(script_dir, 'Data/RV') # location = './Data'
 
 pde = PDE_plot()
-PLOT = False
+PLOT = True
 mesh_size = 100
 
 domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [mesh_size, mesh_size], cell_type=mesh.CellType.triangle)
@@ -104,8 +104,8 @@ t = 0  # Start time
 T = 0.5 # Final time
 dt = 0.01
 num_steps = int(np.ceil(T/dt))
-Cvel = 0.5
-CRV = 10.0
+Cvel = 0.25
+CRV = 4.0
 
 rv = RV(Cvel, CRV, domain)
 
