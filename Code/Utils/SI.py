@@ -26,7 +26,7 @@ class SI:
         
         return node_patches
 
-    def get_epsilon_linear(self, w, node_patches, h_CG, u_n, stiffness_matrix):
+    def get_epsilon_linear(self, w, node_patches, h_CG, u_n, stiffness_matrix, numerator_func):
         V = fem.functionspace(self.domain, ("Lagrange", 1))
         epsilon = fem.Function(V)
         # alphas = []
@@ -52,16 +52,22 @@ class SI:
                 numerator += beta * delta_u
                 denominator += np.abs(beta) * np.abs(delta_u)
 
-            eps = 1e-8 * G_max
+            eps = 1e-8 * G_max + 1e-1
             # print(max(denominator, eps, 1e-4))
             # if max(denominator, eps) == 0 or np.abs(numerator) < 1e-1:
             #     alpha = 0
             # else:
             #     alpha = np.abs(numerator) / max(denominator, eps)
-            alpha = np.abs(numerator) / max(denominator, eps)
-            print(alpha, ":", np.abs(numerator), ":", 1/max(denominator, eps))
+            numerator = np.abs(numerator)
+            denominator = max(denominator, eps)
+            alpha = numerator / denominator
+            # if np.isnan(alpha):
+            #     alpha = 0
+            # print(alpha)
+            # print(alpha, ":", np.abs(numerator), ":", 1/max(denominator, eps))
             # print(alpha, self.Cm, hi, fi_norm)
             epsilon.x.array[node] = alpha * self.Cm * hi * fi_norm
+            numerator_func.x.array[node] = numerator
             # alphas.append(alpha)
         
         # print(max(alphas), min(alphas))
