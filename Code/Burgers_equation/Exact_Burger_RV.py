@@ -21,7 +21,7 @@ location_figures = os.path.join(script_dir, 'Figures/RV') # location = './Figure
 location_data = os.path.join(script_dir, 'Data/RV') # location = './Data'
 
 pde = PDE_plot()
-PLOT = False
+PLOT = True
 mesh_size = 100
 
 domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [mesh_size, mesh_size], cell_type=mesh.CellType.triangle)
@@ -120,9 +120,9 @@ boundary_dofs = fem.locate_dofs_topological(V, fdim, boundary_facets)
 
 bc0 = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
-# Time-dependent output
-xdmf = io.XDMFFile(domain.comm, location_data, "w")
-xdmf.write_mesh(domain)
+# # Time-dependent output
+# xdmf = io.XDMFFile(domain.comm, location_data, "w")
+# xdmf.write_mesh(domain)
 
 # Define solution variable, and interpolate initial solution for visualization in Paraview
 uh = fem.Function(V)
@@ -148,9 +148,9 @@ if PLOT:
     sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
                 position_x=0.1, position_y=0.8, width=0.8, height=0.1)
 
-    renderer = plotter.add_mesh(warped, show_edges=True, lighting=False,
+    renderer = plotter.add_mesh(warped, show_edges=False, lighting=False,
                                 cmap=viridis, scalar_bar_args=sargs,
-                                clim=[0, max(uh.x.array)])
+                                clim=[min(uh.x.array), max(uh.x.array)])
     
 
 h_CG = get_nodal_h(domain)
@@ -182,8 +182,8 @@ assert (converged)
 
 # Update solution at previous time step (u_n)
 u_n.x.array[:] = uh.x.array
-# Write solution to file
-xdmf.write_function(uh, t)
+# # Write solution to file
+# xdmf.write_function(uh, t)
 
 
 
@@ -242,8 +242,8 @@ for i in tqdm(range(num_steps-1)):
     u_old.x.array[:] = u_n.x.array
     u_n.x.array[:] = uh.x.array
 
-    # Write solution to file
-    xdmf.write_function(uh, t)
+    # # Write solution to file
+    # xdmf.write_function(uh, t)
     # Update plot
     if PLOT:
         new_warped = grid.warp_by_scalar("uh", factor=1)
@@ -266,4 +266,4 @@ print(f'Error: {np.abs(u_exact.x.array - uh.x.array)}')
 
 if PLOT:
     plotter.close()
-xdmf.close()
+# xdmf.close()
