@@ -3,6 +3,7 @@ import pyvista
 import ufl
 import numpy as np
 import os 
+from tqdm import tqdm
 
 from petsc4py import PETSc
 from mpi4py import MPI
@@ -16,6 +17,7 @@ from dolfinx.nls.petsc import NewtonSolver
 
 from Utils.PDE_plot import PDE_plot
 from Utils.RV import RV
+from Utils.helpers import get_nodal_h
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -32,7 +34,7 @@ gmsh.model.occ.synchronize()
 gdim = 2
 gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
-hmax = 1/16 # 0.05 in example
+hmax = 1/32 # 0.05 in example
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
 gmsh.model.mesh.generate(gdim)
@@ -43,15 +45,6 @@ domain, cell_markers, facet_markers = gmshio.model_to_mesh(gmsh.model, mesh_comm
 
 V = fem.functionspace(domain, ("Lagrange", 1))
 DG0 = fem.functionspace(domain, ("DG", 0))
-DG1 = fem.functionspace(domain, ("DG", 1))
-
-
-# def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
-#     return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
-
-# def velocity_field(u):
-#     # Apply nonlinear operators correctly to the scalar function u
-#     return ufl.as_vector([u, u])
 
 def initial_condition(x):
     return (x[0]**2 + x[1]**2 <= 1) * 14*np.pi/4 + (x[0]**2 + x[1]**2 > 1) * np.pi/4
@@ -68,6 +61,9 @@ u_old = fem.Function(V)
 u_old.name = "u_old"
 u_old.interpolate(initial_condition)
 
+u_old_old = fem.Function(V)
+u_old_old.name = "u_old_old"
+u_old_old.interpolate(initial_condition)
 
 
 CFL = 0.5
@@ -85,6 +81,7 @@ fdim = domain.topology.dim - 1
 boundary_facets = mesh.locate_entities_boundary(
     domain, fdim, lambda x: np.full(x.shape[1], True, dtype=bool))
 bc = fem.dirichletbc(PETSc.ScalarType(np.pi/4), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
+bc0 = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
 # Time-dependent output
 xdmf = io.XDMFFile(domain.comm, location_data + '/KPP_RV.xdmf', "w")
@@ -99,19 +96,8 @@ RH = fem.Function(V)
 RH.name = "RH"
 RH.interpolate(lambda x: np.full(x.shape[1], 0, dtype = np.float64))
 
-# Variational problem and solver
 u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
-F = (uh*v *ufl.dx -
-     u_n*v *ufl.dx + 
-     0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
-     0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
 
-
-nonlin_problem = NonlinearProblem(F, uh, bcs = [bc])
-nonlin_solver = NewtonSolver(MPI.COMM_WORLD, nonlin_problem)
-nonlin_solver.max_it = 100  # Increase maximum number of iterations
-nonlin_solver.rtol = 1e-1
-nonlin_solver.report = True
 if PLOT:
     # pyvista.start_xvfb()
 
@@ -132,55 +118,18 @@ if PLOT:
                                 clim=[0, max(uh.x.array)])
     
 
-h_DG = fem.Function(DG0)  # Cell-based function for hk values
+h_CG = get_nodal_h(domain)
 
-cell_to_vertex_map = domain.topology.connectivity(domain.topology.dim, 0)
-vertex_coords = domain.geometry.x
-
-num_cells = domain.topology.index_map(domain.topology.dim).size_local
-hk_values = np.zeros(num_cells)
-
-for cell in range(num_cells):
-    # Get the vertices of the current cell
-    cell_vertices = cell_to_vertex_map.links(cell)
-    coords = vertex_coords[cell_vertices]  # Coordinates of the vertices
-    
-    edges = [np.linalg.norm(coords[i] - coords[j]) for i in range(len(coords)) for j in range(i + 1, len(coords))]
-    hk_values[cell] = min(edges) 
-
-h_DG.x.array[:] = hk_values
-
-
-
-v = ufl.TestFunction(V)
-h_trial = ufl.TrialFunction(V)
-a_h = h_trial * v * ufl.dx
-L_h = h_DG * v * ufl.dx
-
-# Solve linear system
-lin_problem = LinearProblem(a_h, L_h, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-h_CG = lin_problem.solve() # returns dolfinx.fem.Function
-
-
-#Take GFEM STEP
-t += dt
-n, converged = nonlin_solver.solve(uh)
-assert (converged)
-# uh.x.scatter_forward()
-
-# Update solution at previous time step (u_n)
-u_n.x.array[:] = uh.x.array
-# Write solution to file
-xdmf.write_function(uh, t)
-
-
-for i in range(num_steps -1):
+for i in tqdm(range(num_steps)):
     t += dt
 
-    F_R = (RH*v*ufl.dx - 1/dt*u_n*v *ufl.dx + 1/dt*u_old*v*ufl.dx -
-        0.5*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx -
-        0.5*ufl.dot(velocity_field(u_old), ufl.grad(u_old))*v*ufl.dx)
-    R_problem = NonlinearProblem(F_R, RH, bcs = [bc])
+    """ BDF2 """
+    F_R = (RH*v*ufl.dx - 
+           3/(2*dt)*u_n*v *ufl.dx +
+           4/(2*dt)*u_old*v*ufl.dx - 
+           1/(2*dt)*u_old_old*v*ufl.dx - 
+           ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
+    R_problem = NonlinearProblem(F_R, RH, bcs=[bc0])
     # Rh = R_problem.solve()
 
     Rh_problem = NewtonSolver(MPI.COMM_WORLD, R_problem)
@@ -192,6 +141,7 @@ for i in range(num_steps -1):
     n, converged = Rh_problem.solve(RH)
 
     RH.x.array[:] = RH.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
+
     epsilon = rv.get_epsilon(uh, velocity_field, RH, h_CG)
  
     F = (uh*v *ufl.dx - u_n*v *ufl.dx + 
@@ -212,6 +162,7 @@ for i in range(num_steps -1):
     uh.x.scatter_forward()
 
     # Update solution at previous time step (u_n)
+    u_old_old.x.array[:] = u_old.x.array
     u_old.x.array[:] = u_n.x.array
     u_n.x.array[:] = uh.x.array
 
@@ -228,6 +179,7 @@ if PLOT:
 xdmf.close()
 
 
-
-pde.plot_pv_2d(domain, 100, epsilon, 'Espilon', 'epsilon_2d', location=location_fig)
-pde.plot_pv_2d(domain, 100, RH, 'RH', 'rh_2d', location=location_fig)
+pde.plot_pv_3d(domain, int(1/hmax), u_n, 'Solution uh', 'uh_3d', location=location_fig)
+pde.plot_pv_2d(domain, int(1/hmax), epsilon, 'Espilon', 'epsilon_2d', location=location_fig)
+RH.x.array[:] = np.abs(RH.x.array)
+pde.plot_pv_2d(domain, int(1/hmax), RH, 'RH', 'Rh_2d', location=location_fig)
