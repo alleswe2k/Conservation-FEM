@@ -132,7 +132,7 @@ class PDE_plot():
 
 
             self.anim_plotter = pv.Plotter()
-            self.anim_plotter.open_gif(f"{filename}_{mesh_size}.gif", fps=10)
+            self.anim_plotter.open_gif(f"{location}/{filename}_{mesh_size}.gif", fps=10)
 
             self.anim_grid.point_data[title] = vector.x.array
 
@@ -144,11 +144,11 @@ class PDE_plot():
             sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
                     position_x=0.1, position_y=0.8, width=0.8, height=0.1)
 
-            renderer = self.anim_plotter.add_mesh(self.anim_warped, show_edges=True, lighting=False,
-                                    cmap=color_map, scalar_bar_args=sargs,
+            self.anim_plotter.add_mesh(self.anim_warped, show_edges=True, lighting=False,
+                                    cmap=color_map, scalar_bar_args=sargs, ambient=0.5,
                                     clim=[min(vector.x.array), max(vector.x.array)])
-            
-            self.anim_plotter.view_xy()
+            if plot_2d:
+                self.anim_plotter.view_xy()
             self.anim_started = True
 
         scale_factor = self.__calc_scale_factor(self.anim_grid, title)

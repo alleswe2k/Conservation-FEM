@@ -20,7 +20,7 @@ location_figures = os.path.join(script_dir, 'Figures/RV')
 location_data = os.path.join(script_dir, 'Data/RV/solution.xdmf')
 
 pde = PDE_plot()
-fraction = 16
+fraction = 32
 hmax = 1/fraction # 0.05 in example
 # Enable or disable real-time plotting
 # Creating mesh
@@ -178,7 +178,7 @@ for i in range(num_steps-1):
     L_R = 1/dt * u_n * v * ufl.dx - 1/dt * u_old * v * ufl.dx + ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx
 
     # Solve linear system
-    problem = LinearProblem(a_R, L_R, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+    problem = LinearProblem(a_R, L_R, bcs=[bc], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
     Rh = problem.solve() # returns dolfinx.fem.Function
     Rh.x.array[:] = Rh.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
 
@@ -225,7 +225,7 @@ for i in range(num_steps-1):
     # Update solution at previous time step (u_n)
     u_n.x.array[:] = uh.x.array
 
-    pde.animation(domain, fraction, epsilon, 'Epsilon', 'epsilon_anim')
+    pde.animation(domain, fraction, Rh, 'Rh', 'rv_anim', location_figures)
 
 print("Done!")
 pde.stop_anim()
