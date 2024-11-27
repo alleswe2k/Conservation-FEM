@@ -97,7 +97,7 @@ class PDE_plot():
         plt.grid(which='both', linestyle='--', linewidth=0.5)
         # Add a text below legend that displays the convergence
         legend_box = plt.legend()
-        txt = mpl.offsetbox.TextArea(f"Convergence: {abs(fit[0]):.2f}")
+        txt = mpl.offsetbox.TextArea(f"Convergence: {fit[0]:.2f}")
         box = legend_box._legend_box
         box.get_children().append(txt)
         box.set_figure(box.figure)
