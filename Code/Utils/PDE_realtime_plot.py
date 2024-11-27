@@ -6,7 +6,7 @@ from dolfinx import plot
 
 class PDE_realtime_plot:
     def __init__(self, location_figures, uh, epsilon, fs, numerator):
-        self.PLOT_SOL = True
+        self.PLOT_SOL = False
         self.uh = uh
         self.epsilon = epsilon
         self.numerator = numerator
@@ -28,7 +28,7 @@ class PDE_realtime_plot:
                                         clim=[0, max(uh.x.array)])
         else:
             # Set up PyVista multi-view self.plotter
-            self.plotter = pyvista.Plotter(shape=(1, 3), off_screen=False, window_size=[2500, 1600])
+            self.plotter = pyvista.Plotter(shape=(1, 2), off_screen=False, window_size=[2500, 1600])
             self.plotter.open_gif(f"{location_figures}/solution_and_epsilon.gif", fps=10)
 
             # Create grid for uh (solution)
@@ -58,16 +58,16 @@ class PDE_realtime_plot:
             self.plotter.view_xy()
 
             # Create grid for numerator
-            self.grid_numerator = pyvista.UnstructuredGrid(*plot.vtk_mesh(fs))
-            self.grid_numerator.point_data["numerator"] = self.numerator.x.array
+            # self.grid_numerator = pyvista.UnstructuredGrid(*plot.vtk_mesh(fs))
+            # self.grid_numerator.point_data["numerator"] = self.numerator.x.array
 
-            self.plotter.subplot(0, 2)  # Right subplot
-            self.plotter.add_text("Numerator", font_size=10, position="upper_left")
-            viridis_numerator = mpl.colormaps.get_cmap("viridis").resampled(25)
-            self.plotter.add_mesh(self.grid_numerator, show_edges=True, cmap=viridis_numerator,
-                            scalar_bar_args=dict(title="numerator", title_font_size=12, label_font_size=10),
-                            clim=[np.min(self.numerator.x.array), np.max(self.numerator.x.array)])
-            self.plotter.view_xy()
+            # self.plotter.subplot(0, 1)  # Right subplot
+            # self.plotter.add_text("Numerator", font_size=10, position="upper_left")
+            # viridis_numerator = mpl.colormaps.get_cmap("viridis").resampled(25)
+            # self.plotter.add_mesh(self.grid_numerator, show_edges=True, cmap=viridis_numerator,
+            #                 scalar_bar_args=dict(title="numerator", title_font_size=12, label_font_size=10),
+            #                 clim=[np.min(self.numerator.x.array), np.max(self.numerator.x.array)])
+            # self.plotter.view_xy()
 
     
     def update_plot(self, uh, epsilon, numerator):
@@ -89,9 +89,9 @@ class PDE_realtime_plot:
             self.plotter.subplot(0, 1)
             self.plotter.update_scalar_bar_range([np.min(self.epsilon.x.array), np.max(self.epsilon.x.array)])
 
-            self.grid_numerator.point_data["numerator"][:] = self.numerator.x.array
-            self.plotter.subplot(0, 2)
-            self.plotter.update_scalar_bar_range([np.min(self.numerator.x.array), np.max(self.numerator.x.array)])
+            # self.grid_numerator.point_data["numerator"][:] = self.numerator.x.array
+            # self.plotter.subplot(0, 1)
+            # self.plotter.update_scalar_bar_range([np.min(self.numerator.x.array), np.max(self.numerator.x.array)])
 
             # Write the updated frame
             self.plotter.write_frame()

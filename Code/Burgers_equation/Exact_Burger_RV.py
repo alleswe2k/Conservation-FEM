@@ -104,8 +104,8 @@ t = 0  # Start time
 T = 0.5 # Final time
 dt = 0.01
 num_steps = int(np.ceil(T/dt))
-Cvel = 0.25
-CRV = 4.0
+Cvel = 0.5
+CRV = 10.0
 
 rv = RV(Cvel, CRV, domain)
 
@@ -151,9 +151,9 @@ if PLOT:
     sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
                 position_x=0.1, position_y=0.8, width=0.8, height=0.1)
 
-    renderer = plotter.add_mesh(warped, show_edges=True, lighting=False,
+    renderer = plotter.add_mesh(warped, show_edges=False, lighting=False,
                                 cmap=viridis, scalar_bar_args=sargs,
-                                clim=[0, max(uh.x.array)])
+                                clim=[min(uh.x.array), max(uh.x.array)])
     
 
 h_CG = get_nodal_h(domain)

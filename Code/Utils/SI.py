@@ -29,11 +29,9 @@ class SI:
     def get_epsilon_linear(self, w, node_patches, h_CG, u_n, stiffness_matrix, numerator_func):
         V = fem.functionspace(self.domain, ("Lagrange", 1))
         epsilon = fem.Function(V)
-        # alphas = []
-
+        G_max = max(u_n.x.array)
         for node, adjacent_nodes in node_patches.items():
             # node = i and adjacent_nodes (including self) = j
-            # print("Node:", node, " - Adjacent nodes:", adjacent_nodes)
             hi = h_CG.x.array[node]
             w_values = w.x.array.reshape((-1, self.domain.geometry.dim))
             fi = w_values[node]
@@ -41,36 +39,23 @@ class SI:
 
             numerator = 0
             denominator = 0
-            G_max = 0 # max |G_j|
+            # G_max = 0 # max |G_j|
             for adj_node in adjacent_nodes:
-                G_max = max(G_max, np.abs(u_n.x.array[adj_node]))
+                # G_max = max(G_max, np.abs(u_n.x.array[adj_node]))
+
                 delta_u = u_n.x.array[adj_node] - u_n.x.array[node]
-                # print(adj_node)
-                # print(A.getValue(node, adj_node))
                 beta = stiffness_matrix.getValue(node, adj_node)
                 # beta = 1
                 numerator += beta * delta_u
                 denominator += np.abs(beta) * np.abs(delta_u)
 
-            eps = 1e-8 * G_max + 1e-1
-            # print(max(denominator, eps, 1e-4))
-            # if max(denominator, eps) == 0 or np.abs(numerator) < 1e-1:
-            #     alpha = 0
-            # else:
-            #     alpha = np.abs(numerator) / max(denominator, eps)
+            eps = 1e-1 * G_max
+            # eps = 1e-1
             numerator = np.abs(numerator)
             denominator = max(denominator, eps)
             alpha = numerator / denominator
-            # if np.isnan(alpha):
-            #     alpha = 0
-            # print(alpha)
-            # print(alpha, ":", np.abs(numerator), ":", 1/max(denominator, eps))
-            # print(alpha, self.Cm, hi, fi_norm)
             epsilon.x.array[node] = alpha * self.Cm * hi * fi_norm
-            numerator_func.x.array[node] = numerator
-            # alphas.append(alpha)
-        
-        # print(max(alphas), min(alphas))
+            numerator_func.x.array[node] = numerator / denominator # Note: For debugging
         
         return epsilon
 

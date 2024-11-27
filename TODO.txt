@@ -5,3 +5,8 @@ Increase Rh
 Try burger with first order viscosity
 
 Plot smoothness in time while we do RV (and first order viscosity?)
+
+# W. 48
+* Try with different eps, convergence with smooth IC
+* Use eps * G_max where G_max over whole domain
+* Then try SI with Burger and KPP
