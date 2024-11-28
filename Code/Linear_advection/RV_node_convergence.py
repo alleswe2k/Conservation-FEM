@@ -16,6 +16,8 @@ from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, LinearProblem
 
 from Utils.PDE_plot import PDE_plot
+from Utils.SI import SI
+from Utils.RV import RV
 
 import os
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -84,6 +86,10 @@ for hmax in hmaxes:
     num_steps = int(np.ceil(T/dt))
     Cvel = 0.25
     CRV = 1.0
+
+    si = SI(1, domain)
+    rv = RV(Cvel, CRV, domain)
+    node_patches = si.get_patch_dictionary()
 
     # Create boundary condition
     fdim = domain.topology.dim - 1
@@ -178,7 +184,12 @@ for hmax in hmaxes:
         # Solve linear system
         problem = LinearProblem(a_R, L_R, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
         Rh = problem.solve() # returns dolfinx.fem.Function
-        Rh.x.array[:] = Rh.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
+        #Rh.x.array[:] = Rh.x.array / np.max(u_n.x.array - np.mean(u_n.x.array)) #----- 0.41870130343981926
+        Rh.x.array[:] = rv.normalize_Rh_robust_ni(uh, Rh, node_patches) #------- 0.5813225474370259
+        #Rh.x.array[:] = rv.normalize_Rh_robust_simple(uh, Rh, node_patches) #------- 0.5344210238866037
+        #Rh.x.array[:] = rv.normalize_Rh(uh, Rh, node_patches) #-------0.5774394314048876
+        #Rh.x.array[:] = Rh.x.array / np.linalg.norm(u_n.x.array - np.mean(u_n.x.array), ord=np.inf) #-------0.41870130343981926
+
 
         epsilon = fem.Function(V)
 

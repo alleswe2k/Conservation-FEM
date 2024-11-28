@@ -25,21 +25,107 @@ class RV:
         
         return epsilon
     
-    def normalize_Rh(self, uh, Rh, node_patches):
-        #print(uh.x.array - np.mean(uh.x.array))
-        #absolute_term = np.max(uh.x.array - np.mean(uh.x.array))
+
+    
+    def normalize_Rh(self, uh, Rh, node_patches): #From the paper
+
         absolute_term = np.linalg.norm(uh.x.array - np.mean(uh.x.array), ord=np.inf)
-        #print(absolute_term)
-        Rh_normalized = np.zeros(uh.x.array.size)
-        for node in range(uh.x.array.size):
-            u_i = np.zeros(uh.x.array.size)
+        Rh_normalized = np.zeros(Rh.x.array.size)
+
+        for node, adjacent_nodes in node_patches.items():
+            # node = i and adjacent_nodes (including self) = j
+            # print("Node:", node, " - Adjacent nodes:", adjacent_nodes)
+            #hi = h_CG.x.array[node]
+
+            u_i = np.zeros(len(adjacent_nodes))
+            #input()
+            #u_i[node] = uh.x.array[node]
             j = 0
-            for i in node_patches[node]:
-                u_i[j] = uh.x.array[i]
+            for adj_node in adjacent_nodes:
+                #i += 1
+                u_i[j] = uh.x.array[adj_node]
                 j += 1
             u_tilde = np.max(u_i) - np.min(u_i)
             n_i = np.abs(u_tilde - absolute_term)
             Rh_normalized[node] = np.abs(Rh.x.array[node])/n_i
+       
+        return Rh_normalized
+    
+
+    def find_ni(self, uh, Rh, node_patches): #From paper
+
+        absolute_term = np.linalg.norm(uh.x.array - np.mean(uh.x.array), ord=np.inf)
+        ni = np.zeros(Rh.x.array.size)
+
+        for node, adjacent_nodes in node_patches.items():
+            # node = i and adjacent_nodes (including self) = j
+            # print("Node:", node, " - Adjacent nodes:", adjacent_nodes)
+            #hi = h_CG.x.array[node]
+
+            u_i = np.zeros(len(adjacent_nodes))
+            Rh_patch = np.zeros(len(adjacent_nodes)+1)
+            #input()
+            #u_i[node] = uh.x.array[node]
+            j = 0
+            for adj_node in adjacent_nodes:
+                #i += 1
+                u_i[j] = uh.x.array[adj_node]
+                j += 1
+            u_tilde = np.max(u_i) - np.min(u_i)
+            n_i = np.abs(u_tilde - absolute_term)
+            ni[node] = n_i
+       
+        return ni
+    
+    def normalize_Rh_robust_ni(self, uh, Rh, node_patches): #From Murtazos notes and paper
+
+        absolute_term = np.linalg.norm(uh.x.array - np.mean(uh.x.array), ord=np.inf)
+        Rh_normalized = np.zeros(Rh.x.array.size)
+
+        for node, adjacent_nodes in node_patches.items():
+            # node = i and adjacent_nodes (including self) = j
+            # print("Node:", node, " - Adjacent nodes:", adjacent_nodes)
+            #hi = h_CG.x.array[node]
+
+            u_i = np.zeros(len(adjacent_nodes))
+            Rh_patch = np.zeros(len(adjacent_nodes)+1)
+            Rh_patch[0] = Rh.x.array[node]
+            #input()
+            #u_i[node] = uh.x.array[node]
+            j = 0
+            for adj_node in adjacent_nodes:
+                #i += 1
+                u_i[j] = uh.x.array[adj_node]
+                Rh_patch[j+1] = np.abs(Rh.x.array[adj_node])
+                j += 1
+            u_tilde = np.max(u_i) - np.min(u_i)
+            n_i = np.abs(u_tilde - absolute_term)
+            Rh_i = np.max(Rh_patch)
+            Rh_normalized[node] = Rh_i/n_i
+       
+        return Rh_normalized
+    
+    def normalize_Rh_robust_simple(self, uh, Rh, node_patches): #From Murtazos notes
+
+        n = np.linalg.norm(uh.x.array - np.mean(uh.x.array), ord=np.inf)
+        Rh_normalized = np.zeros(Rh.x.array.size)
+
+        for node, adjacent_nodes in node_patches.items():
+            # node = i and adjacent_nodes (including self) = j
+            # print("Node:", node, " - Adjacent nodes:", adjacent_nodes)
+            #hi = h_CG.x.array[node]
+
+            Rh_patch = np.zeros(len(adjacent_nodes)+1)
+            Rh_patch[0] = Rh.x.array[node]
+            #input()
+            #u_i[node] = uh.x.array[node]
+            j = 0
+            for adj_node in adjacent_nodes:
+                Rh_patch[j+1] = np.abs(Rh.x.array[adj_node])
+                j += 1
+            Rh_i = np.max(Rh_patch)
+            Rh_normalized[node] = Rh_i/n
+       
         return Rh_normalized
 
             

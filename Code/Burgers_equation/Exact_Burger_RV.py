@@ -14,6 +14,7 @@ from Utils.PDE_plot import PDE_plot
 
 from Utils.helpers import get_nodal_h
 from Utils.RV import RV
+from Utils.SI import SI
 
 import os
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -21,7 +22,7 @@ location_figures = os.path.join(script_dir, 'Figures/RV') # location = './Figure
 location_data = os.path.join(script_dir, 'Data/RV') # location = './Data'
 
 pde = PDE_plot()
-PLOT = False
+PLOT = True
 mesh_size = 100
 
 domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [mesh_size, mesh_size], cell_type=mesh.CellType.triangle)
@@ -104,10 +105,12 @@ t = 0  # Start time
 T = 0.5 # Final time
 dt = 0.01
 num_steps = int(np.ceil(T/dt))
-Cvel = 0.5
+Cvel = 0.25
 CRV = 10.0
 
 rv = RV(Cvel, CRV, domain)
+si = SI(1, domain)
+node_patches = si.get_patch_dictionary()
 
 u_exact_boundary = fem.Function(V)
 u_exact_boundary.interpolate(exact_solution)
@@ -195,7 +198,8 @@ for i in tqdm(range(num_steps)):
     n, converged = Rh_problem.solve(RH)
     # n, converged = Rh.solve(uh)
     assert (converged)
-    RH.x.array[:] = RH.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
+    #RH.x.array[:] = RH.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
+    RH.x.array[:] = rv.normalize_Rh_robust_simple(uh, RH, node_patches)
 
     epsilon = rv.get_epsilon(uh, velocity_field, RH, h_CG)
 
@@ -232,10 +236,10 @@ for i in tqdm(range(num_steps)):
 
 pde.plot_pv_3d(domain, mesh_size, u_exact, "exact_solution", "E_exact_solution_3D", location_figures)
 pde.plot_pv_3d(domain, mesh_size, u_initial, "exact_initial", "E_exact_initial_3D", location_figures)
-pde.plot_pv_3d(domain, mesh_size, RH, "Rh", "E_Rh_3D", location_figures)
+pde.plot_pv_3d(domain, mesh_size, RH, "Rh_robust", "E_Rh_3D_robust", location_figures)
 
 pde.plot_pv_2d(domain, mesh_size, epsilon, 'Espilon', 'E_epsilon_2D', location_figures)
-pde.plot_pv_2d(domain, mesh_size, RH, 'RH', 'E_Rh_2D', location_figures)
+pde.plot_pv_2d(domain, mesh_size, RH, 'RH_robust', 'E_Rh_2D_robust', location_figures)
 pde.plot_pv_2d(domain, mesh_size, u_n, 'u_n', 'E_sol_2D', location_figures)
 pde.plot_pv_2d(domain, mesh_size, u_exact, 'u_exact', 'E_u_exact_2D', location_figures)
 # for Rh in RH.x.array:

@@ -16,6 +16,7 @@ from Utils.PDE_plot import PDE_plot
 
 from Utils.helpers import get_nodal_h
 from Utils.RV import RV
+from Utils.SI import SI
 
 import os
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -64,10 +65,12 @@ t = 0  # Start time
 T = 0.5 # Final time
 dt = 0.01
 num_steps = int(np.ceil(T/dt))
-Cvel = 1
+Cvel = 0.5
 CRV = np.inf
 
 rv = RV(Cvel, CRV, domain)
+si = SI(1, domain)
+node_patches = si.get_patch_dictionary()
 
 # # Create boundary condition
 fdim = domain.topology.dim - 1
@@ -151,7 +154,8 @@ for i in range(num_steps -1):
     n, converged = Rh_problem.solve(RH)
     # n, converged = Rh.solve(uh)
     assert (converged)
-    RH.x.array[:] = RH.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
+    #RH.x.array[:] = RH.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
+    RH.x.array[:] = rv.normalize_Rh_robust_simple(uh,RH,node_patches)
     epsilon = rv.get_epsilon(uh, velocity_field, RH, h_CG)
     
     problem = NonlinearProblem(F, uh, bcs = [bc])
