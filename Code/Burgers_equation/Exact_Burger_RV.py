@@ -95,14 +95,17 @@ u_old = fem.Function(V)
 u_old.name = "u_old"
 u_old.interpolate(initial_condition)
 
+u_old_old = fem.Function(V)
+u_old_old.name = "u_old_old"
+u_old_old.interpolate(initial_condition)
 
 CFL = 0.2
 t = 0  # Start time
 T = 0.5 # Final time
 dt = 0.01
 num_steps = int(np.ceil(T/dt))
-Cvel = 1
-CRV = np.inf
+Cvel = 0.5
+CRV = 10.0
 
 rv = RV(Cvel, CRV, domain)
 
@@ -120,9 +123,9 @@ boundary_dofs = fem.locate_dofs_topological(V, fdim, boundary_facets)
 
 bc0 = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
-# Time-dependent output
-xdmf = io.XDMFFile(domain.comm, location_data, "w")
-xdmf.write_mesh(domain)
+# # Time-dependent output
+# xdmf = io.XDMFFile(domain.comm, location_data, "w")
+# xdmf.write_mesh(domain)
 
 # Define solution variable, and interpolate initial solution for visualization in Paraview
 uh = fem.Function(V)
@@ -148,63 +151,38 @@ if PLOT:
     sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
                 position_x=0.1, position_y=0.8, width=0.8, height=0.1)
 
-    renderer = plotter.add_mesh(warped, show_edges=True, lighting=False,
+    renderer = plotter.add_mesh(warped, show_edges=False, lighting=False,
                                 cmap=viridis, scalar_bar_args=sargs,
-                                clim=[0, max(uh.x.array)])
+                                clim=[min(uh.x.array), max(uh.x.array)])
     
 
 h_CG = get_nodal_h(domain)
 
-# Create a function to interpolate the exact solution
-u_exact_boundary = fem.Function(V)
-u_exact_boundary.interpolate(lambda x: exact_solution(x, dt))
-
-# Apply the interpolated exact solution on the boundary
-bc = fem.dirichletbc(u_exact_boundary, boundary_dofs)
-# Variational problem and solver
 u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
-F = (uh*v *ufl.dx -
-     u_n*v *ufl.dx + 
-     0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
-     0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
 
-nonlin_problem = NonlinearProblem(F, uh, bcs=[bc])
-nonlin_solver = NewtonSolver(MPI.COMM_WORLD, nonlin_problem)
-nonlin_solver.max_it = 100  # Increase maximum number of iterations
-nonlin_solver.rtol = 1e-4
-nonlin_solver.report = True
-
-#Take GFEM STEP
-t += dt
-n, converged = nonlin_solver.solve(uh)
-assert (converged)
-# uh.x.scatter_forward()
-
-# Update solution at previous time step (u_n)
-u_n.x.array[:] = uh.x.array
-# Write solution to file
-xdmf.write_function(uh, t)
-
-
-
-for i in tqdm(range(num_steps-1)):
+for i in tqdm(range(num_steps)):
+    t += dt
     # Create a function to interpolate the exact solution
     u_exact_boundary = fem.Function(V)
     u_exact_boundary.interpolate(lambda x: exact_solution(x, t))
 
     # Apply the interpolated exact solution on the boundary
     bc = fem.dirichletbc(u_exact_boundary, boundary_dofs)
-    t += dt
 
     # a_R = u*v*ufl.dx
     # L_R = 1/dt*u_n * v * ufl.dx - 1/dt* u_old * v *ufl.dx + ufl.dot(velocity_field(u_n),ufl.grad(u_n))* v * ufl.dx
     # F_R = (a_R - L_R)
-
-
-    # F_R = (RH*v*ufl.dx - 1/dt*u_n*v *ufl.dx + 1/dt*u_old*v*ufl.dx -
-    #     0.5*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx - 
-    #     0.5*ufl.dot(velocity_field(u_old), ufl.grad(u_old))*v*ufl.dx)
-    F_R = (RH*v*ufl.dx - 1/dt*u_n*v *ufl.dx + 1/dt*u_old*v*ufl.dx - ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
+    """ BDF1 """
+    # F_R = (RH*v*ufl.dx - 
+    #        1/dt*u_n*v *ufl.dx + 
+    #        1/dt*u_old*v*ufl.dx - 
+    #        ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
+    """ BDF2 """
+    F_R = (RH*v*ufl.dx - 
+           3/(2*dt)*u_n*v *ufl.dx +
+           4/(2*dt)*u_old*v*ufl.dx - 
+           1/(2*dt)*u_old_old*v*ufl.dx - 
+           ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
     R_problem = NonlinearProblem(F_R, RH, bcs=[bc0])
     # Rh = R_problem.solve()
 
@@ -239,11 +217,12 @@ for i in tqdm(range(num_steps-1)):
     uh.x.scatter_forward()
 
     # Update solution at previous time step (u_n)
+    u_old_old.x.array[:] = u_old.x.array
     u_old.x.array[:] = u_n.x.array
     u_n.x.array[:] = uh.x.array
 
-    # Write solution to file
-    xdmf.write_function(uh, t)
+    # # Write solution to file
+    # xdmf.write_function(uh, t)
     # Update plot
     if PLOT:
         new_warped = grid.warp_by_scalar("uh", factor=1)
@@ -259,11 +238,11 @@ pde.plot_pv_2d(domain, mesh_size, epsilon, 'Espilon', 'E_epsilon_2D', location_f
 pde.plot_pv_2d(domain, mesh_size, RH, 'RH', 'E_Rh_2D', location_figures)
 pde.plot_pv_2d(domain, mesh_size, u_n, 'u_n', 'E_sol_2D', location_figures)
 pde.plot_pv_2d(domain, mesh_size, u_exact, 'u_exact', 'E_u_exact_2D', location_figures)
-for Rh in RH.x.array:
-    print(Rh)
+# for Rh in RH.x.array:
+#     print(Rh)
 
 print(f'Error: {np.abs(u_exact.x.array - uh.x.array)}')
 
 if PLOT:
     plotter.close()
-xdmf.close()
+# xdmf.close()
