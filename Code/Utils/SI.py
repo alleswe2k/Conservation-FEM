@@ -4,9 +4,13 @@ import numpy as np
 from dolfinx import fem
 from dolfinx.fem.petsc import LinearProblem
 class SI:
-    def __init__(self, Cm, domain):
+    def __init__(self, Cm, domain, eps):
         self.Cm = Cm
         self.domain = domain
+        self.eps = eps
+
+    def normalize_data(data):
+        return (data - np.min(data)) / (np.max(data) - np.min(data))
     
     def get_patch_dictionary(self):
         """ Creat patch dictionary """
@@ -45,14 +49,15 @@ class SI:
 
                 delta_u = u_n.x.array[adj_node] - u_n.x.array[node]
                 beta = stiffness_matrix.getValue(node, adj_node)
+                print(beta)
                 # beta = 1
                 numerator += beta * delta_u
                 denominator += np.abs(beta) * np.abs(delta_u)
 
-            eps = 1e-1 * G_max
+            # eps = 1e-8 * G_max
             # eps = 1e-1
             numerator = np.abs(numerator)
-            denominator = max(denominator, eps)
+            denominator = max(denominator, self.eps * G_max)
             alpha = numerator / denominator
             epsilon.x.array[node] = alpha * self.Cm * hi * fi_norm
             numerator_func.x.array[node] = numerator / denominator # Note: For debugging
@@ -80,7 +85,7 @@ class SI:
                 numerator += beta * (u_n.x.array[adj_node] - u_n.x.array[node])
                 denominator += np.abs(beta) * np.abs(u_n.x.array[adj_node] - u_n.x.array[node])
 
-            alpha = np.abs(numerator) / max(denominator, 1e-8)
+            alpha = np.abs(numerator) / max(denominator, self.eps)
             # print('Numerator:', np.abs(numerator), ' - Denominator:', denominator, ' - Alpha:', alpha)
             epsilon.x.array[node] = alpha * self.Cm * hi * fi_norm
         
