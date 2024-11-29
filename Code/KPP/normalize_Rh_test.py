@@ -212,7 +212,7 @@ for i in range(num_steps-1):
     #Rh.x.array[:] = rv.normalize_Rh(u_n, Rh, node_patches)
     #Rh_test.x.array[:] = rv.find_ni(u_n, Rh, node_patches)
 
-    Rh.x.array[:]= rv.normalize_Rh_robust_2(u_n, Rh, node_patches)
+    #Rh.x.array[:]= rv.normalize_Rh_robust_2(u_n, Rh, node_patches)
     #Rh_test.x.array[:] = rv.find_ni(u_n, Rh, node_patches)
 
 
