@@ -155,7 +155,7 @@ for i in range(num_steps -1):
     # n, converged = Rh.solve(uh)
     assert (converged)
     #RH.x.array[:] = RH.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
-    RH.x.array[:] = rv.normalize_Rh_robust_simple(uh,RH,node_patches)
+    RH.x.array[:] = rv.normalize_Rh(uh,RH,node_patches)
     epsilon = rv.get_epsilon(uh, velocity_field, RH, h_CG)
     
     problem = NonlinearProblem(F, uh, bcs = [bc])

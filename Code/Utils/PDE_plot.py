@@ -84,26 +84,25 @@ class PDE_plot():
         plotter.screenshot(f"{location}/{filename}_{mesh_size}.png")  # Saves the plot as a PNG file
 
 
-    def plot_convergence(self, L2_errors, title, filename, location="Figures"):
-        x = np.array([4, 8, 16, 32])
-        fit = np.polyfit(np.log10(x), np.log10(L2_errors), 1)
-        y = 10**fit[1] * x**fit[0]
+    def plot_convergence(self, L2_errors, mesh_sizes, title, filename, location="Figures"):
+        fit = np.polyfit(np.log10(mesh_sizes), np.log10(L2_errors), 1)
+        y = 10**fit[1] * mesh_sizes**fit[0]
 
         # Plot L2 errors and fitted line
         plt.figure(figsize=(8, 6))
-        plt.loglog(x, L2_errors, '-^', label="L2 Errors")
-        plt.loglog(x, y, '--', label="Fitted Line")
+        plt.loglog(mesh_sizes, L2_errors, '-^', label="L2 Errors")
+        plt.loglog(mesh_sizes, y, '--', label="Fitted Line")
 
         # Add a denser grid
         plt.grid(which='both', linestyle='--', linewidth=0.5)
         # Add a text below legend that displays the convergence
         legend_box = plt.legend()
-        txt = mpl.offsetbox.TextArea(f"Convergence: {abs(fit[0]):.2f}")
+        txt = mpl.offsetbox.TextArea(f"Convergence: {fit[0]:.2f}")
         box = legend_box._legend_box
         box.get_children().append(txt)
         box.set_figure(box.figure)
 
-        plt.xlabel(r"$1/h$")
+        plt.xlabel("Mesh size")
         plt.ylabel(r"$||e||$")
         plt.title(f'Convergence for {title}')
 

@@ -21,7 +21,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 location_figures = os.path.join(script_dir, 'Figures/RV/normalized_rh')
 
 # Enable or disable real-time plotting
-PLOT = True
+PLOT = False
 pde = PDE_plot()
 # Creating mesh
 gmsh.initialize()
@@ -90,7 +90,8 @@ node_patches = si.get_patch_dictionary()
 fdim = domain.topology.dim - 1
 boundary_facets = mesh.locate_entities_boundary(
     domain, fdim, lambda x: np.full(x.shape[1], True, dtype=bool))
-bc = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
+boundary_nodes = fem.locate_dofs_topological(V, fdim, boundary_facets)
+bc = fem.dirichletbc(PETSc.ScalarType(0), boundary_nodes, V)
 
 # Define solution variable, and interpolate initial solution for visualization in Paraview
 uh = fem.Function(V)
@@ -128,7 +129,7 @@ if PLOT:
     grid = pyvista.UnstructuredGrid(*plot.vtk_mesh(V))
 
     plotter = pyvista.Plotter()
-    plotter.open_gif("RV_node.gif", fps=10)
+    plotter.open_gif("normalize_Rh_robust_ni_RV_node.gif", fps=10)
 
     grid.point_data["uh"] = uh.x.array
     warped = grid.warp_by_scalar("uh", factor=1)
@@ -137,7 +138,7 @@ if PLOT:
     sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
                 position_x=0.1, position_y=0.8, width=0.8, height=0.1)
 
-    renderer = plotter.add_mesh(warped, show_edges=True, lighting=False,
+    renderer = plotter.add_mesh(warped, show_edges=False, lighting=False,
                                 cmap=viridis, scalar_bar_args=sargs,
                                 clim=[0, max(uh.x.array)])
 
@@ -201,13 +202,20 @@ for i in range(num_steps-1):
     L_R = 1/dt * u_n * v * ufl.dx - 1/dt * u_old * v * ufl.dx + ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx
 
     # Solve linear system
-    problem = LinearProblem(a_R, L_R, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+    problem = LinearProblem(a_R, L_R, bcs = [bc], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
     Rh = problem.solve() # returns dolfinx.fem.Function
 
     #pde.plot_pv_2d(domain, hmax, Rh, 'RH', 'rh_test_before', location=location_figures)
-    Rh_test.x.array[:] = rv.normalize_Rh(uh, Rh, node_patches)
-    Rh.x.array[:] = rv.normalize_Rh_robust(uh, Rh, node_patches)
-    #ni.x.array[:] = rv.normalize_Rh_ni(uh, Rh, node_patches)
+    
+    #Rh.x.array[:] = Rh.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
+
+    #Rh.x.array[:] = rv.normalize_Rh(u_n, Rh, node_patches)
+    #Rh_test.x.array[:] = rv.find_ni(u_n, Rh, node_patches)
+
+    Rh.x.array[:]= rv.normalize_Rh_robust_2(u_n, Rh, node_patches)
+    #Rh_test.x.array[:] = rv.find_ni(u_n, Rh, node_patches)
+
+
     #pde.plot_pv_2d(domain, hmax, Rh, 'Rh robust', 'rh_robust', location=location_figures)
     #pde.plot_pv_2d(domain, hmax, ni, 'ni', 'ni', location=location_figures)
     #pde.plot_pv_2d(domain, hmax, Rh_test, 'Rh non robust', 'rh_non_robust', location=location_figures)
@@ -264,6 +272,11 @@ for i in range(num_steps-1):
         warped.points[:, :] = new_warped.points
         warped.point_data["uh"][:] = uh.x.array
         plotter.write_frame()
+
+
+pde.plot_pv_2d(domain, hmax, Rh, 'normalize_Rh_robust_2 T=1', 'normalize_Rh_robust_2', location=location_figures)
+#pde.plot_pv_2d(domain, hmax, Rh_test, 'find_ni T=1', 'find_ni', location=location_figures)
+pde.plot_pv_2d(domain, hmax, epsilon, 'epsilon T=1', 'normalize_Rh_robust_2_epsilon', location=location_figures)
 
 if PLOT:
     plotter.close()

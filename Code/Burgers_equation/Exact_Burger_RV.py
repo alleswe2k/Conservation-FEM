@@ -126,9 +126,9 @@ boundary_dofs = fem.locate_dofs_topological(V, fdim, boundary_facets)
 
 bc0 = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
-# Time-dependent output
-xdmf = io.XDMFFile(domain.comm, location_data, "w")
-xdmf.write_mesh(domain)
+# # Time-dependent output
+# xdmf = io.XDMFFile(domain.comm, location_data, "w")
+# xdmf.write_mesh(domain)
 
 # Define solution variable, and interpolate initial solution for visualization in Paraview
 uh = fem.Function(V)
@@ -145,7 +145,7 @@ if PLOT:
     grid = pyvista.UnstructuredGrid(*plot.vtk_mesh(V))
 
     plotter = pyvista.Plotter()
-    plotter.open_gif(f"{location_figures}/RV_E_burger.gif", fps=10)
+    plotter.open_gif(f"{location_figures}/normalized/non_normalized epsilon.gif", fps=10)
 
     grid.point_data["uh"] = uh.x.array
     warped = grid.warp_by_scalar("uh", factor=1)
@@ -154,9 +154,9 @@ if PLOT:
     sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
                 position_x=0.1, position_y=0.8, width=0.8, height=0.1)
 
-    renderer = plotter.add_mesh(warped, show_edges=True, lighting=False,
+    renderer = plotter.add_mesh(warped, show_edges=False, lighting=False,
                                 cmap=viridis, scalar_bar_args=sargs,
-                                clim=[0, max(uh.x.array)])
+                                clim=[min(uh.x.array), max(uh.x.array)])
     
 
 h_CG = get_nodal_h(domain)
@@ -199,9 +199,10 @@ for i in tqdm(range(num_steps)):
     # n, converged = Rh.solve(uh)
     assert (converged)
     #RH.x.array[:] = RH.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
-    RH.x.array[:] = rv.normalize_Rh_robust_simple(uh, RH, node_patches)
+    RH.x.array[:] = rv.normalize_Rh_robust_2(u_n, RH, node_patches)
 
-    epsilon = rv.get_epsilon(uh, velocity_field, RH, h_CG)
+    #epsilon = rv.get_epsilon_x2(uh, u_n, velocity_field, RH, h_CG, node_patches)
+    epsilon = rv.get_epsilon(uh,velocity_field,RH,h_CG)
 
     F = (uh*v *ufl.dx - u_n*v *ufl.dx + 
         0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
@@ -225,8 +226,8 @@ for i in tqdm(range(num_steps)):
     u_old.x.array[:] = u_n.x.array
     u_n.x.array[:] = uh.x.array
 
-    # Write solution to file
-    xdmf.write_function(uh, t)
+    # # Write solution to file
+    # xdmf.write_function(uh, t)
     # Update plot
     if PLOT:
         new_warped = grid.warp_by_scalar("uh", factor=1)
@@ -234,14 +235,14 @@ for i in tqdm(range(num_steps)):
         warped.point_data["uh"][:] = uh.x.array
         plotter.write_frame()
 
-pde.plot_pv_3d(domain, mesh_size, u_exact, "exact_solution", "E_exact_solution_3D", location_figures)
-pde.plot_pv_3d(domain, mesh_size, u_initial, "exact_initial", "E_exact_initial_3D", location_figures)
-pde.plot_pv_3d(domain, mesh_size, RH, "Rh_robust", "E_Rh_3D_robust", location_figures)
+#pde.plot_pv_3d(domain, mesh_size, u_exact, "exact_solution", "E_exact_solution_3D", location_figures)
+#pde.plot_pv_3d(domain, mesh_size, u_initial, "exact_initial", "E_exact_initial_3D", location_figures)
+#pde.plot_pv_3d(domain, mesh_size, RH, "Rh_robust", "E_Rh_3D_robust", location_figures)
 
-pde.plot_pv_2d(domain, mesh_size, epsilon, 'Espilon', 'E_epsilon_2D', location_figures)
-pde.plot_pv_2d(domain, mesh_size, RH, 'RH_robust', 'E_Rh_2D_robust', location_figures)
-pde.plot_pv_2d(domain, mesh_size, u_n, 'u_n', 'E_sol_2D', location_figures)
-pde.plot_pv_2d(domain, mesh_size, u_exact, 'u_exact', 'E_u_exact_2D', location_figures)
+#pde.plot_pv_2d(domain, mesh_size, epsilon, 'Epsilon', 'E_epsilon_2D', location_figures)
+#pde.plot_pv_2d(domain, mesh_size, RH, 'RH_robust', 'E_Rh_2D_robust', location_figures)
+#pde.plot_pv_2d(domain, mesh_size, u_n, 'u_n', 'E_sol_2D', location_figures)
+#pde.plot_pv_2d(domain, mesh_size, u_exact, 'u_exact', 'E_u_exact_2D', location_figures)
 # for Rh in RH.x.array:
 #     print(Rh)
 
@@ -249,4 +250,4 @@ print(f'Error: {np.abs(u_exact.x.array - uh.x.array)}')
 
 if PLOT:
     plotter.close()
-xdmf.close()
+# xdmf.close()

@@ -24,7 +24,7 @@ location_fig = os.path.join(script_dir, 'Figures/RV/normalized_rh') # location =
 #location_data = os.path.join(script_dir, 'Data') # location = './Figures'
 
 pde = PDE_plot()
-PLOT = True
+PLOT = False
 gmsh.initialize()
 
 membrane = gmsh.model.occ.addRectangle(-2,-2,0,4,4)
@@ -194,7 +194,9 @@ for i in range(num_steps -1):
 
     #RH.x.array[:] = RH.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
 
-    RH.x.array[:] = rv.normalize_Rh_robust(uh, RH, node_patches)
+    RH.x.array[:] = rv.normalize_Rh_robust_ni(u_n, RH, node_patches)
+
+
     epsilon = rv.get_epsilon(uh, velocity_field, RH, h_CG)
     #print(RH.x.array.size)
     #print(epsilon.x.array.size)
@@ -236,5 +238,5 @@ if PLOT:
 
 
 
-pde.plot_pv_2d(domain, hmax, epsilon, 'Epsilon', 'epsilon_2d', location=location_fig)
-pde.plot_pv_2d(domain, hmax, RH, 'RH', 'rh_2d', location=location_fig)
+#pde.plot_pv_2d(domain, hmax, epsilon, 'Epsilon', 'epsilon_2d', location=location_fig)
+pde.plot_pv_2d(domain, hmax, RH, 'RH', 'KPP_normalize_Rh_robust_ni', location=location_fig)
