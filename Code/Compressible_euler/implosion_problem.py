@@ -1,6 +1,7 @@
 import pyvista as pv
 
 import ufl
+from basix.ufl import element
 import numpy as np
 
 from petsc4py import PETSc
@@ -55,8 +56,6 @@ def plot_grid():
     plotter.view_xy()
     plotter.screenshot(f"{location_figures}/grid.png")
 
-V = fem.functionspace(domain, ("Lagrange", 1))
-DG0 = fem.functionspace(domain, ("DG", 0))
 
 def init_pressure(x):
     p_in = 0.14
@@ -72,42 +71,59 @@ def init_density(x):
     inside = np.abs(x[0]) + np.abs(x[1]) <= radius
     return np.where(inside, p_in, p_out)
 
-p_n = fem.Function(V)
-p_n.name = "p_n"
-p_n.interpolate(init_pressure)
-
-pde.plot_pv_2d(domain, fraction, p_n, 'Pressure', 'pressure', location_figures)
-
 def reflecting_bc(x):
     n = fem.Function(V)
     n_x = x[0] / np.sqrt(x[0] ** 2 + x[1] ** 2)
     n_y = x[1] / np.sqrt(x[0] ** 2 + x[1] ** 2)
     return np.array([n_x, n_y])
 
+reflecting_bc = ufl.FacetNormal(domain)
+
 def reflect_velocity(u, n):
     return u - 2 * ufl.dot(u, n) * n
 
-u = fem.Function(V)
-n = fem.Constant(domain, reflect_velocity(u, reflecting_bc))
+v_cg2 = element("Lagrange", domain.topology.cell_name(), 2, shape=(domain.geometry.dim, ))
+s_cg1 = element("Lagrange", domain.topology.cell_name(), 1)
+V = fem.functionspace(domain, v_cg2) # Vector valued function space
+Q = fem.functionspace(domain, s_cg1) # Scalar valued function space
 
-dofs = fem.locate_dofs_geometrical(V, lambda x: np.isclose(x[0], -0.3) | np.isclose(x[0], 0.3) | np.isclose(x[1], -0.3) | np.isclose(x[1], 0.3))
+def walls(x):
+    return np.logical_or(np.isclose(x[1], -0.3), np.isclose(x[1], 0.3))
 
-bc = fem.dirichletbc(n, dofs)
+wall_dofs = fem.locate_dofs_geometrical(V, walls)
+u_noslip = np.array((0,) * domain.geometry.dim, dtype=PETSc.ScalarType)
+bc_noslip = fem.dirichletbc(u_noslip, wall_dofs, V)
 
+rho_n = fem.Function(Q)
+m_n = fem.Function(V)
+e_n = fem.Function(Q)
 
-rho_0 = fem.Function(V)
-m_0 = fem.Function(V)
-e_0 = fem.Function(V)
-
-rho_0.interpolate(init_density)
-m_0.interpolate(lambda x: 0.0)
-e_0.interpolate(lambda x: 1.0)
-
-
-v = ufl.TestFunction(V)
+rho_n.interpolate(init_density)
+m_n.interpolate(lambda x: 0.0)
+e_n.interpolate(lambda x: 1.0)
 gamma = 1.4
 
-rho, m1, m2, e = u.split()
 
-T = e / rho - 0.5 * (m1**2 + m2**2) / rho**2
-p = (gamma - 1) * rho * T
+u_n = fem.Function(V)
+p_n = fem.Function(Q)
+T_n = fem.Function(Q)
+
+u_n = m_n / rho_n
+
+print(u_n.x.array)
+
+
+
+
+# def cfl_cond():
+#     pass
+
+
+
+
+# rho_trial, rho_test = ufl.TrialFunction(Q), ufl.TestFunction(Q)
+
+
+
+
+
