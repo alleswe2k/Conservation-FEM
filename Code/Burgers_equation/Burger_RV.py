@@ -23,7 +23,7 @@ location_figures = os.path.join(script_dir, 'Figures/SI') # location = './Figure
 location_data = os.path.join(script_dir, 'Data/SI') # location = './Data'
 
 pde = PDE_plot()
-PLOT = True
+PLOT = False
 
 gmsh.initialize()
 
