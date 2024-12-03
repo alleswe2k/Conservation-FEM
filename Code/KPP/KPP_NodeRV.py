@@ -17,6 +17,7 @@ from dolfinx.nls.petsc import NewtonSolver
 
 from Utils.PDE_plot import PDE_plot
 from Utils.RV import RV
+from Utils.SI import SI
 from Utils.helpers import get_nodal_h
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -75,6 +76,8 @@ Cvel = 0.5
 CRV = 4.0
 
 rv = RV(Cvel, CRV, domain)
+si = SI(1, domain)
+node_patches = si.get_patch_dictionary()
 
 # Create boundary condition
 fdim = domain.topology.dim - 1
@@ -141,9 +144,7 @@ for i in tqdm(range(num_steps)):
 
     n, converged = Rh_problem.solve(RH)
 
-    RH.x.array[:] = RH.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
-
-    epsilon = rv.get_epsilon(uh, velocity_field, RH, h_CG)
+    epsilon = rv.get_epsilon_nonlinear(uh, u_n, velocity_field, RH, h_CG, node_patches)
  
     F = (uh*v *ufl.dx - u_n*v *ufl.dx + 
         0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 

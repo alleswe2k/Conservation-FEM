@@ -14,6 +14,7 @@ from Utils.PDE_plot import PDE_plot
 
 from Utils.helpers import get_nodal_h
 from Utils.RV import RV
+from Utils.SI import SI
 
 import os
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -105,6 +106,8 @@ for mesh_size in mesh_sizes:
     CRV = np.inf
 
     rv = RV(Cvel, CRV, domain)
+    si = SI(1, domain)
+    node_patches = SI.get_patch_dictionary()
 
     u_exact_boundary = fem.Function(V)
     u_exact_boundary.interpolate(exact_solution)
@@ -190,9 +193,8 @@ for mesh_size in mesh_sizes:
         n, converged = Rh_problem.solve(RH)
         # n, converged = Rh.solve(uh)
         assert (converged)
-        RH.x.array[:] = RH.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
-
-        epsilon = rv.get_epsilon(uh, velocity_field, RH, h_CG)
+        
+        epsilon = rv.get_epsilon_nonlinear(uh, u_n, velocity_field, RH, h_CG, node_patches)
 
         F = (uh*v *ufl.dx - u_n*v *ufl.dx + 
             0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 

@@ -16,6 +16,8 @@ from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, LinearProblem
 
 from Utils.PDE_plot import PDE_plot
+from Utils.SI import SI
+from Utils.RV import RV
 
 import os
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -84,6 +86,10 @@ for hmax in hmaxes:
     num_steps = int(np.ceil(T/dt))
     Cvel = 0.25
     CRV = 1.0
+
+    si = SI(1, domain)
+    rv = RV(Cvel, CRV, domain)
+    node_patches = si.get_patch_dictionary()
 
     # Create boundary condition
     fdim = domain.topology.dim - 1
@@ -178,17 +184,19 @@ for hmax in hmaxes:
         # Solve linear system
         problem = LinearProblem(a_R, L_R, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
         Rh = problem.solve() # returns dolfinx.fem.Function
-        Rh.x.array[:] = Rh.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
+        #Rh.x.array[:] = Rh.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
 
-        epsilon = fem.Function(V)
+        #epsilon = fem.Function(V)
 
-        for node in range(Rh.x.array.size):
-            hi = h_CG.x.array[node]
-            Ri = Rh.x.array[node]
-            w_values = w.x.array.reshape((-1, domain.geometry.dim))
-            fi = w_values[node]
-            fi_norm = np.linalg.norm(fi)
-            epsilon.x.array[node] = min(Cvel * hi * fi_norm, CRV * hi ** 2 * np.abs(Ri))
+        epsilon = rv.get_epsilon_linear(uh, u_n, velocity_field, Rh, h_CG, node_patches)
+
+        # for node in range(Rh.x.array.size):
+        #     hi = h_CG.x.array[node]
+        #     Ri = Rh.x.array[node]
+        #     w_values = w.x.array.reshape((-1, domain.geometry.dim))
+        #     fi = w_values[node]
+        #     fi_norm = np.linalg.norm(fi)
+        #     epsilon.x.array[node] = min(Cvel * hi * fi_norm, CRV * hi ** 2 * np.abs(Ri))
 
 
         a = u * v * ufl.dx + 0.5 * dt * ufl.dot(w, ufl.grad(u)) * v * ufl.dx + 0.5 * epsilon * dt * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
