@@ -21,10 +21,11 @@ from Utils.RV import RV
 
 import os
 script_dir = os.path.dirname(os.path.abspath(__file__))
-location_figures = os.path.join(script_dir, 'Figures/SI')
+location_figures = os.path.join(script_dir, 'Figures/RV')
 
 L2_errors = []
-hmaxes = [1/4, 1/8, 1/16, 1/32]
+mesh_sizes = np.array([4, 8, 16, 32])
+hmaxes = 1/mesh_sizes
 for hmax in hmaxes:
     # Creating mesh
     gmsh.initialize()
@@ -188,7 +189,7 @@ for hmax in hmaxes:
 
         #epsilon = fem.Function(V)
 
-        epsilon = rv.get_epsilon_linear(uh, u_n, velocity_field, Rh, h_CG, node_patches)
+        epsilon = rv.get_epsilon_linear(uh, u_n, w, Rh, h_CG, node_patches)
 
         # for node in range(Rh.x.array.size):
         #     hi = h_CG.x.array[node]
@@ -246,8 +247,7 @@ fitted_error = np.polyfit(np.log10(hmaxes), np.log10(L2_errors), 1)
 print(f'convergence: {fitted_error[0]}')
 
 pde = PDE_plot()
-pde.plot_convergence(L2_errors, 'RV-Nodal', 'rv_conv', location_figures)
-
+pde.plot_convergence(L2_errors, mesh_sizes, 'linear advection for RV', 'lin_adv_rv_conv', location_figures)
 
 
 

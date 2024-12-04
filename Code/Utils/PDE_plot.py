@@ -16,7 +16,7 @@ class PDE_plot():
         tdim = domain.topology.dim
         os.environ["PYVISTA_OFF_SCREEN"] = "True"
         pv.start_xvfb()
-        plotter = pv.Plotter(off_screen=True)
+        plotter = pv.Plotter(off_screen=True, window_size=[600, 400])
         domain.topology.create_connectivity(tdim, tdim)
         topology, cell_types, geometry = plot.vtk_mesh(domain, tdim)
         grid = pv.UnstructuredGrid(topology, cell_types, geometry)
@@ -44,11 +44,22 @@ class PDE_plot():
         pv.global_theme.colorbar_orientation = 'horizontal'
         plotter, warped, color_map = self.__setup_plot(domain, vector, title)
 
-        sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
-                position_x=0.1, position_y=0.8, width=0.8, height=0.1)
-        plotter.add_mesh(warped, show_edges=False, lighting=False,
-                                cmap=color_map, scalar_bar_args=sargs,
-                                clim=[min(vector.x.array), max(vector.x.array)])
+        sargs = {
+            "title": "",
+            "fmt": "%.2e",
+            "color": "black",
+            "position_x": 0.1,  # Position to the far right of the plot
+            "position_y": 0.8,  # Center vertically
+            "width": 0.8,  # Narrow width
+            "height": 0.1  # Height proportional to the plot
+        }
+        plotter.add_mesh(
+            warped,
+            show_edges=False, 
+            lighting=False,
+            cmap=color_map,
+            scalar_bar_args=sargs,
+            clim=[min(vector.x.array), max(vector.x.array)])
 
         # Take a screenshot
         plotter.screenshot(f"{location}/{filename}_{mesh_size}.png")  # Saves the plot as a PNG file
@@ -57,13 +68,10 @@ class PDE_plot():
     def plot_pv_2d(self, domain, mesh_size, vector, title, filename, location=""):
 
         pv.global_theme.colorbar_orientation = 'vertical'
-        plotter, warped, color_map = self.__setup_plot(domain, vector, title)       
-
+        plotter, warped, color_map = self.__setup_plot(domain, vector, title)
 
         sargs = {
-            "title": title,
-            "title_font_size": 20,
-            "label_font_size": 15,
+            "title": "",
             "fmt": "%.2e",
             "color": "black",
             "position_x": 0.85,  # Position to the far right of the plot
@@ -72,6 +80,8 @@ class PDE_plot():
             "height": 0.6  # Height proportional to the plot
         }
 
+        plotter.add_text(title, font_size=16, position='upper_edge', color='black')  # Plot title
+    
         plotter.add_mesh(
             warped,
             show_edges=False, 
@@ -89,7 +99,7 @@ class PDE_plot():
         y = 10**fit[1] * mesh_sizes**fit[0]
 
         # Plot L2 errors and fitted line
-        plt.figure(figsize=(8, 6))
+        plt.figure(figsize=(6, 6))
         plt.loglog(mesh_sizes, L2_errors, '-^', label="L2 Errors")
         plt.loglog(mesh_sizes, y, '--', label="Fitted Line")
 
@@ -105,6 +115,7 @@ class PDE_plot():
         plt.xlabel("Mesh size")
         plt.ylabel(r"$||e||$")
         plt.title(f'Convergence for {title}')
+        plt.tight_layout()
 
         # Save the plot
         plt.savefig(f'{location}/{filename}.png')

@@ -22,7 +22,8 @@ location_figures = os.path.join(script_dir, 'Figures/RV')
 location_data = os.path.join(script_dir, 'Data/RV/solution.xdmf')
 
 # Enable or disable real-time plotting
-PLOT = True
+pde = PDE_plot()
+PLOT = False
 # Creating mesh
 gmsh.initialize()
 
@@ -32,7 +33,8 @@ gmsh.model.occ.synchronize()
 gdim = 2
 gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
-hmax = 1/16 # 0.05 in example
+mesh_size = 32
+hmax = 1/mesh_size
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
 gmsh.model.mesh.generate(gdim)
@@ -258,6 +260,5 @@ if PLOT:
     plotter.close()
 xdmf.close()
 
-error_L2 = np.sqrt(domain.comm.allreduce(fem.assemble_scalar(fem.form((uh - u_ex)**2 * ufl.dx)), op=MPI.SUM))
-if domain.comm.rank == 0:
-    print(f"L2-error: {error_L2:.2e}")
+pde.plot_pv_2d(domain, mesh_size, uh, f'Solution at t = {T} with RV', 'lin_adv_rv', location_figures)
+pde.plot_pv_3d(domain, mesh_size, uh, f'Solution at t = {T} with RV', 'lin_adv_rv_3d', location_figures)
