@@ -33,7 +33,7 @@ gmsh.model.occ.synchronize()
 gdim = 2
 gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
-fraction = 64
+fraction = 4
 hmax = 1/fraction # 0.05 in example
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
@@ -71,16 +71,16 @@ def init_density(x):
     inside = np.abs(x[0]) + np.abs(x[1]) <= radius
     return np.where(inside, p_in, p_out)
 
-def reflecting_bc(x):
-    n = fem.Function(V)
-    n_x = x[0] / np.sqrt(x[0] ** 2 + x[1] ** 2)
-    n_y = x[1] / np.sqrt(x[0] ** 2 + x[1] ** 2)
-    return np.array([n_x, n_y])
+# def reflecting_bc(x):
+#     n = fem.Function(V)
+#     n_x = x[0] / np.sqrt(x[0] ** 2 + x[1] ** 2)
+#     n_y = x[1] / np.sqrt(x[0] ** 2 + x[1] ** 2)
+#     return np.array([n_x, n_y])
 
-reflecting_bc = ufl.FacetNormal(domain)
+# reflecting_bc = ufl.FacetNormal(domain)
 
-def reflect_velocity(u, n):
-    return u - 2 * ufl.dot(u, n) * n
+# def reflect_velocity(u, n):
+#     return u - 2 * ufl.dot(u, n) * n
 
 v_cg2 = element("Lagrange", domain.topology.cell_name(), 2, shape=(domain.geometry.dim, ))
 s_cg1 = element("Lagrange", domain.topology.cell_name(), 1)
@@ -99,19 +99,23 @@ m_n = fem.Function(V)
 e_n = fem.Function(Q)
 
 rho_n.interpolate(init_density)
-m_n.interpolate(lambda x: 0.0)
-e_n.interpolate(lambda x: 1.0)
+m_n.interpolate(lambda x: np.zeros((domain.geometry.dim, x.shape[1])))
+e_n.interpolate(lambda x: np.ones(x.shape[1]))
+
 gamma = 1.4
 
 
 u_n = fem.Function(V)
+u_n.interpolate(lambda x: np.zeros((domain.geometry.dim, x.shape[1])))
+
 p_n = fem.Function(Q)
+p_n.interpolate(lambda x: np.zeros(x.shape[1]))
+
 T_n = fem.Function(Q)
+p_n.interpolate(lambda x: np.zeros(x.shape[1]))
 
-u_n = m_n / rho_n
-
-print(u_n.x.array)
-
+print(f"Vector Function Space DoFs: {V.dofmap.index_map.size_local * domain.geometry.dim}")
+print(f"Scalar Function Space DoFs: {Q.dofmap.index_map.size_local}")
 
 
 
