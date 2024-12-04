@@ -12,6 +12,10 @@ For all of the above, convergence rate is to be reported for mesh sizes 1/4, 1/8
 
 # Progression map
 
+## W.48
+We have been working on our presentation, and figuring out the structure of the report, what to include and what not. Moreover, we have been testing different normalization methods, debugging the smoothness indicator code
+as well as plotting everything that is necessary.
+
 ## W. 47 
 We have gone through the code and verified each part, the code now yields more accurate figures regarding the exact burgers and KPP. We have also tested the BDF2 method of calculating RH for burgers and KPP as well as a different approach of normalizing the residual. We went through our Github repo and restructured the folder for an easier time navigating it. 
 
