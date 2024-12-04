@@ -80,44 +80,49 @@ node_patches = si.get_patch_dictionary()
 a_stiffness = ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
 stiffness_matrix = assemble_matrix(fem.form(a_stiffness))
 stiffness_matrix.assemble()
-dense_matrix = stiffness_matrix.copy().getValuesCSR()
-rows, cols, values = dense_matrix
-# Convert to sparse format for better printing
-from scipy.sparse import csr_matrix
-scipy_sparse_matrix = csr_matrix((values, cols, rows))
+print(stiffness_matrix.getRow(0))
+start, end = stiffness_matrix.getOwnershipRange()
+print(start, end)
+# dense_matrix = stiffness_matrix.copy().getValuesCSR()
+# rows, cols, values = dense_matrix
+# # Convert to sparse format for better printing
+# from scipy.sparse import csr_matrix
+# scipy_sparse_matrix = csr_matrix((values, cols, rows))
 
-# Print sparse matrix
-print("Sparse matrix (CSR format):")
-print(scipy_sparse_matrix)
+# # Print sparse matrix
+# print("Sparse matrix (CSR format):")
+# print(scipy_sparse_matrix)
 
-# If dense output is desired (use only for small matrices)
-print("\nDense matrix:")
-dense_matrix = scipy_sparse_matrix.toarray()
-print(dense_matrix)
+# # If dense output is desired (use only for small matrices)
+# print("\nDense matrix:")
+# dense_matrix = scipy_sparse_matrix.toarray()
+# print(dense_matrix)
 
-for node, adjacent_nodes in node_patches.items():
-        print("----", node, "----")
-        for adj_node in adjacent_nodes:
-            beta = stiffness_matrix.getValue(node, adj_node)
-            print(adj_node, beta)
+# for node, adjacent_nodes in node_patches.items():
+#         print("----", node, "----")
+#         for adj_node in adjacent_nodes:
+#             beta = stiffness_matrix.getValue(node, adj_node)
+#             print(adj_node, beta)
 
-dof_coordinates = V.tabulate_dof_coordinates()
+# dof_coordinates = V.tabulate_dof_coordinates()
 
-# Get unique node indices (for non-overlapping partitions)
-node_indices = np.arange(len(dof_coordinates))
+# # Get unique node indices (for non-overlapping partitions)
+# node_indices = np.arange(len(dof_coordinates))
 
-# Prepare mesh for PyVista
-topology, cell_types, geometry = plot.vtk_mesh(domain, domain.topology.dim)
-grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
+# # Prepare mesh for PyVista
+# topology, cell_types, geometry = plot.vtk_mesh(domain, domain.topology.dim)
+# grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
 
-# Add labels for node indices
-plotter = pyvista.Plotter()
-plotter.add_mesh(grid, show_edges=True, color="white")
-plotter.add_point_labels(dof_coordinates, node_indices.astype(str), point_size=20, font_size=24, text_color="black")
-plotter.view_xy()
+# # Add labels for node indices
+# plotter = pyvista.Plotter()
+# plotter.add_mesh(grid, show_edges=True, color="white")
+# plotter.add_point_labels(dof_coordinates, node_indices.astype(str), point_size=20, font_size=24, text_color="black")
+# plotter.view_xy()
 
-# Show or save the plot
-if not pyvista.OFF_SCREEN:
-    plotter.show()
-else:
-    plotter.screenshot("labeled_mesh.png")
+# print(stiffness_matrix.getValue(3, 4))
+
+# # Show or save the plot
+# if not pyvista.OFF_SCREEN:
+#     plotter.show()
+# else:
+#     plotter.screenshot("labeled_mesh.png")

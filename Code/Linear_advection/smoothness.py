@@ -161,7 +161,7 @@ for i in range(num_steps):
     epsilon = si.get_epsilon_linear(w, node_patches, h_CG, u_n, stiffness_matrix, numerator_func)
      # Update plot
     pde_realtime_plot.update_plot(uh, epsilon, numerator_func)
-    input()
+    # input()
 
     a = u * v * ufl.dx + 0.5 * dt * ufl.dot(w, ufl.grad(u)) * v * ufl.dx + 0.5 * epsilon * dt * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
     L = u_n * v * ufl.dx - 0.5 * dt * ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx - 0.5 * epsilon * dt * ufl.dot(ufl.grad(u_n), ufl.grad(v)) * ufl.dx

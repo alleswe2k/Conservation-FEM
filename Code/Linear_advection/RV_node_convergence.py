@@ -5,6 +5,7 @@ import pyvista
 import ufl
 import numpy as np
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 from petsc4py import PETSc
 from mpi4py import MPI
@@ -46,10 +47,10 @@ for hmax in hmaxes:
     W = fem.functionspace(domain, ("Lagrange", 1, (domain.geometry.dim, ))) # Lagrange 2 in documentation
     DG0 = fem.functionspace(domain, ("DG", 0))
 
-    # def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
-    #     return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
     def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
-        return (x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2
+        return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
+    # def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
+    #     return (x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2
 
     def velocity_field(x):
         return np.array([-2*np.pi*x[1], 2*np.pi*x[0]])
@@ -169,7 +170,7 @@ for hmax in hmaxes:
     u_n.x.array[:] = uh.x.array
 
     """ Then time loop """
-    for i in range(num_steps-1):
+    for i in tqdm(range(num_steps-1)):
         t += dt
 
         a_R = u * v * ufl.dx
