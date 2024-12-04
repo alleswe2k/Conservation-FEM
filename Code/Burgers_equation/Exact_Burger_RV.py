@@ -110,7 +110,7 @@ CRV = 10.0
 
 rv = RV(Cvel, CRV, domain)
 si = SI(1, domain)
-node_patches = SI.get_patch_dictionary()
+node_patches = si.get_patch_dictionary()
 
 u_exact_boundary = fem.Function(V)
 u_exact_boundary.interpolate(exact_solution)
