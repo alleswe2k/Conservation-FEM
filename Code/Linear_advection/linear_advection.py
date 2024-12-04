@@ -50,11 +50,11 @@ W = fem.functionspace(domain, ("Lagrange", 1, (domain.geometry.dim, ))) # Lagran
 # w_cg1 = element("Lagrange", domain.topology.cell_name(), 2, shape=(domain.geometry.dim, 0))
 # W = fem.functionspace(domain, w_cg1)
 
-# def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
-#     return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
-
 def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
-    return (x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2
+    return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
+
+# def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
+#     return (x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2
 
 def velocity_field(x):
     return np.array([-2*np.pi*x[1], 2*np.pi*x[0]])
@@ -102,8 +102,8 @@ uh.name = "uh"
 uh.interpolate(initial_condition)
 # xdmf.write_function(uh, t)
 
-pde.plot_pv_2d(domain, mesh_size, uh, 'Initial condition', 'init_cond', location_figures)
-pde.plot_pv_3d(domain, mesh_size, uh, 'Initial condition', 'init_cond_3d', location_figures)
+pde.plot_pv(domain, mesh_size, uh, 'Initial condition', 'init_cond_cont_IC', location_figures, plot_2d=True)
+pde.plot_pv(domain, mesh_size, uh, 'Initial condition', 'init_cond_cont_IC_3d', location_figures)
 
 
 # Variational problem and solver
@@ -185,6 +185,6 @@ if PLOT:
     plotter.close()
 xdmf.close()
 
-pde.plot_pv_2d(domain, mesh_size, uh, f'Solution at t = {T}', 'lin_adv_sol', location_figures)
-pde.plot_pv_3d(domain, mesh_size, uh, f'Solution at t = {T}', 'lin_adv_sol_3d', location_figures)
+pde.plot_pv(domain, mesh_size, uh, 'Solution 2d', 'lin_adv_sol_cont_IC', location_figures, plot_2d=True)
+pde.plot_pv(domain, mesh_size, uh, 'Solution 3d', 'lin_adv_sol_cont_IC_3d', location_figures)
 
