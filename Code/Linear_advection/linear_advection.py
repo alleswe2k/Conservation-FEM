@@ -29,7 +29,7 @@ gmsh.model.occ.synchronize()
 gdim = 2
 gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
-hmax = 1/32 # 0.05 in example
+hmax = 1/4 # 0.05 in example
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
 gmsh.model.mesh.generate(gdim)
@@ -64,6 +64,7 @@ u_ex.interpolate(initial_condition)
 w = fem.Function(W)
 w.name = "w"
 w.interpolate(velocity_field)
+
 
 w_values = w.x.array.reshape((-1, domain.geometry.dim))
 w_inf_norm = np.linalg.norm(w_values, ord=np.inf)

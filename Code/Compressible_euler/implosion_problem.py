@@ -14,6 +14,7 @@ from dolfinx.io import gmshio
 from dolfinx import fem, mesh, plot
 from dolfinx.fem.petsc import NonlinearProblem
 from dolfinx.nls.petsc import NewtonSolver
+import ufl.finiteelement
 from Utils.PDE_plot import PDE_plot
 
 from Utils.helpers import get_nodal_h
@@ -89,10 +90,9 @@ def init_density(x):
 # def reflect_velocity(u, n):
 #     return u - 2 * ufl.dot(u, n) * n
 
-v_cg2 = element("Lagrange", domain.topology.cell_name(), 1, shape=(domain.geometry.dim, ))
-s_cg1 = element("Lagrange", domain.topology.cell_name(), 1)
-V = fem.functionspace(domain, v_cg2) # Vector valued function space
-Q = fem.functionspace(domain, s_cg1) # Scalar valued function space
+
+V = fem.functionspace(domain, ("Lagrange", 1, (domain.geometry.dim, ))) # Vector valued function space
+Q = fem.functionspace(domain, ("Lagrange", 1)) # Scalar valued function space
 
 def walls(x):
     return np.logical_or(np.isclose(x[1], -0.3), np.isclose(x[1], 0.3))
@@ -147,7 +147,7 @@ def cfl_cond():
     for node in range(number_of_nodes):
         u_len = np.linalg.norm(u_vals[node])
         lst.append(hmax / u_len)
-    return min(np.min(lst), 1e-2)
+    return min(np.min(lst), 1e-1)
 
 dt = cfl_cond()
 
@@ -167,43 +167,69 @@ rho_trial, rho_test = ufl.TrialFunction(Q), ufl.TestFunction(Q)
 m_trial, m_test = ufl.TrialFunction(V), ufl.TestFunction(V)
 e_trial, e_test = ufl.TrialFunction(Q), ufl.TestFunction(Q)
  
+
 # Formulation for density
-F1 = (rho_trial * rho_test * ufl.dx - 
-    0.5 * dt * np.dot(u_n, ufl.grad(rho_test)) * rho_trial * ufl.dx -
+F1 = (rho_trial * rho_test * ufl.dx -
+    0.5 * dt * rho_trial * ufl.dot(u_n, ufl.grad(rho_test)) * ufl.dx -
     rho_n * rho_test * ufl.dx +
-    0.5 * dt * np.dot(u_n, ufl.grad(rho_test)) * rho_n * ufl.dx)
+    0.5 * dt * rho_n * ufl.dot(u_n, ufl.grad(rho_test)) * ufl.dx)
+a1 = fem.form(ufl.lhs(F1))
+L1 = fem.form(ufl.rhs(F1))
+
+A1 = assemble_matrix(a1, bcs=[bc_noslip])
+A1.assemble()
+b1 = create_vector(L1)
 
 # Formulation for momentum
 F2 = ufl.dot(m_trial, m_test) * ufl.dx - 0.5 * dt * ufl.dot(ufl.dot(u_n, ufl.grad(m_test)), m_trial) * ufl.dx - dt * p_n * ufl.div(m_test) * ufl.dx
 F2 -= ufl.dot(m_n, m_test) * ufl.dx + 0.5 * dt * ufl.dot(ufl.dot(u_n, ufl.grad(m_test)), m_n) * ufl.dx
+a2 = fem.form(ufl.lhs(F2))
+L2 = fem.form(ufl.rhs(F2))
+
+A2 = assemble_matrix(a2, bcs=[bc_noslip])
+A2.assemble()
+b2 = create_vector(L2)
 
 # Formulation for energy
 F3 = e_trial * e_test * ufl.dx - 0.5 * dt * ufl.dot(u_n, ufl.grad(e_test)) * e_trial * ufl.dx + dt * ufl.div(ufl.outer(u_n, p_n)) * e_test * ufl.dx
 F3 -= e_n * e_test * ufl.dx + 0.5 * dt * ufl.dot(u_n, ufl.grad(e_test)) * e_n * ufl.dx
+a3 = fem.form(ufl.lhs(F3))
+L3 = fem.form(ufl.rhs(F3))
+
+A3 = assemble_matrix(a3, bcs=[bc_noslip])
+A3.assemble()
+b3 = create_vector(L3)
 
 # Solver for density
-print("Create solvers")
-problem1 = NonlinearProblem(F1, rho_h, bcs=[bc_noslip])
-solver1 = NewtonSolver(MPI.COMM_WORLD, problem1)
-solver1.max_it = max_iterations
-solver1.rtol = tolerance
-solver1.report = True
+solver1 = PETSc.KSP().create(domain.comm)
+solver1.setOperators(A1)
+solver1.setType(PETSc.KSP.Type.PREONLY)
+solver1.getPC().setType(PETSc.PC.Type.LU)
 
-print("First solver created")
 
-# Solver for momentum
-problem2 = NonlinearProblem(F2, m_h, bcs=[bc_noslip])
-solver2 = NewtonSolver(MPI.COMM_WORLD, problem2)
-solver2.max_it = max_iterations
-solver2.rtol = tolerance
-solver2.report = True
+# # Solver for density
+# print("Create solvers")
+# problem1 = NonlinearProblem(F1, rho_h, bcs=[bc_noslip])
+# solver1 = NewtonSolver(MPI.COMM_WORLD, problem1)
+# solver1.max_it = max_iterations
+# solver1.rtol = tolerance
+# solver1.report = True
 
-# Solver for energy
-problem3 = NonlinearProblem(F3, rho_h, bcs=[bc_noslip])
-solver3 = NewtonSolver(MPI.COMM_WORLD, problem3)
-solver3.max_it = max_iterations
-solver3.rtol = tolerance
-solver3.report = True
+# print("First solver created")
+
+# # Solver for momentum
+# problem2 = NonlinearProblem(F2, m_h, bcs=[bc_noslip])
+# solver2 = NewtonSolver(MPI.COMM_WORLD, problem2)
+# solver2.max_it = max_iterations
+# solver2.rtol = tolerance
+# solver2.report = True
+
+# # Solver for energy
+# problem3 = NonlinearProblem(F3, rho_h, bcs=[bc_noslip])
+# solver3 = NewtonSolver(MPI.COMM_WORLD, problem3)
+# solver3.max_it = max_iterations
+# solver3.rtol = tolerance
+# solver3.report = True
 
 T = 1
 t = 0
@@ -232,21 +258,34 @@ while t < T:
     dt = cfl_cond()
     t += dt
 
-    # Solve for density
-    n1, converged1 = solver1.solve(rho_h)
-    assert (converged1)
-    rho_h.x.scatter_forward()
-    print(f"Number of interations: {n1:d}")
+    with b1.localForm() as loc_1:
+        loc_1.set(0)
+    assemble_vector(b1, L1)
 
-    # Solve for momentum
-    n2, converged2 = solver2.solve(m_h)
-    assert (converged2)
-    m_h.x.scatter_forward()
+    # Apply Dirichlet boundary condition to the vector
+    apply_lifting(b1, [a1], [[bc_noslip]])
+    b1.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
+    set_bc(b1, [bc_noslip])
+    
+    # Solve linear problem
+    solver1.solve(b1, rho_h.x.petsc_vec)
+    rho_h.x.scatter_forward()   
 
-    # Solve for energy
-    n3, converged3 = solver3.solve(e_h)
-    assert (converged3)
-    e_h.x.scatter_forward()
+    # # Solve for density
+    # n1, converged1 = solver1.solve(rho_h)
+    # assert (converged1)
+    # rho_h.x.scatter_forward()
+    # print(f"Number of interations: {n1:d}")
+
+    # # Solve for momentum
+    # n2, converged2 = solver2.solve(m_h)
+    # assert (converged2)
+    # m_h.x.scatter_forward()
+
+    # # Solve for energy
+    # n3, converged3 = solver3.solve(e_h)
+    # assert (converged3)
+    # e_h.x.scatter_forward()
 
     rho_n.x.array[:] = rho_h.x.array
     m_n.x.array[:] = m_h.x.array
