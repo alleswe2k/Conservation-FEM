@@ -3,6 +3,8 @@ import pyvista
 import ufl
 import numpy as np
 
+from basix.ufl import element
+
 from petsc4py import PETSc
 from mpi4py import MPI
 
@@ -56,6 +58,12 @@ V = fem.functionspace(domain, ("Lagrange", 1))
 W = fem.functionspace(domain, ("Lagrange", 1, (domain.geometry.dim, ))) # Lagrange 2 in documentation
 DG0 = fem.functionspace(domain, ("DG", 0))
 DG1 = fem.functionspace(domain, ("DG", 1))
+
+v_cg2 = element("Lagrange", domain.topology.cell_name(), 2, shape=(domain.geometry.dim, ))
+s_cg1 = element("Lagrange", domain.topology.cell_name(), 1)
+V1 = fem.functionspace(domain, v_cg2) # Vector valued function space
+Q1 = fem.functionspace(domain, s_cg1) # Scalar valued function space
+
 
 # def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
 #     return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
@@ -270,6 +278,9 @@ plotter.add_point_labels(
 )
 
 plotter.view_xy()
+
+print(f"Vector Function Space DoFs: {V.dofmap.index_map.size_local}")
+print(f"Scalar Function Space DoFs: {Q.dofmap.index_map.size_local}")
 
 if not pyvista.OFF_SCREEN:
     plotter.show()
