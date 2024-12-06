@@ -232,14 +232,14 @@ for i in tqdm(range(num_steps)):
         warped.point_data["uh"][:] = uh.x.array
         plotter.write_frame()
 
-pde.plot_pv_3d(domain, mesh_size, u_exact, "exact_solution", "E_exact_solution_3D", location_figures)
-pde.plot_pv_3d(domain, mesh_size, u_initial, "exact_initial", "E_exact_initial_3D", location_figures)
-pde.plot_pv_3d(domain, mesh_size, RH, "Rh", "E_Rh_3D", location_figures)
+pde.plot_pv(domain, mesh_size, u_exact, "exact_solution", "E_exact_solution_3D", location_figures)
+pde.plot_pv(domain, mesh_size, u_initial, "exact_initial", "E_exact_initial_3D", location_figures)
+pde.plot_pv(domain, mesh_size, RH, "Rh", "E_Rh_3D", location_figures)
 
-pde.plot_pv_2d(domain, mesh_size, epsilon, 'Espilon', 'E_epsilon_2D', location_figures)
-pde.plot_pv_2d(domain, mesh_size, RH, 'RH', 'E_Rh_2D', location_figures)
-pde.plot_pv_2d(domain, mesh_size, u_n, 'u_n', 'E_sol_2D', location_figures)
-pde.plot_pv_2d(domain, mesh_size, u_exact, 'u_exact', 'E_u_exact_2D', location_figures)
+pde.plot_pv(domain, mesh_size, epsilon, 'Espilon', 'E_epsilon_2D', location_figures, plot_2d=True)
+pde.plot_pv(domain, mesh_size, RH, 'RH', 'E_Rh_2D', location_figures, plot_2d=True)
+pde.plot_pv(domain, mesh_size, u_n, 'u_n', 'E_sol_2D', location_figures, plot_2d=True)
+pde.plot_pv(domain, mesh_size, u_exact, 'u_exact', 'E_u_exact_2D', location_figures, plot_2d=True)
 # for Rh in RH.x.array:
 #     print(Rh)
 

@@ -26,7 +26,7 @@ location_fig = os.path.join(script_dir, 'Figures/RV') # location = './Figures'
 location_data = os.path.join(script_dir, 'Data') # location = './Figures'
 
 pde = PDE_plot()
-PLOT = True
+PLOT = False
 gmsh.initialize()
 
 membrane = gmsh.model.occ.addRectangle(-2,-2,0,4,4)
@@ -180,7 +180,7 @@ if PLOT:
     plotter.close()
 xdmf.close()
 
-pde.plot_pv_3d(domain, int(1/hmax), u_n, 'Solution uh', 'uh_3d', location=location_fig)
-pde.plot_pv_2d(domain, int(1/hmax), epsilon, 'Espilon', 'epsilon_2d', location=location_fig)
+pde.plot_pv(domain, int(1/hmax), u_n, 'Solution uh', 'uh_3d', location=location_fig, plot_2d=True)
+pde.plot_pv(domain, int(1/hmax), epsilon, 'Espilon', 'epsilon_2d', location=location_fig, plot_2d=True)
 RH.x.array[:] = np.abs(RH.x.array)
-pde.plot_pv_2d(domain, int(1/hmax), RH, 'RH', 'Rh_2d', location=location_fig)
+pde.plot_pv(domain, int(1/hmax), RH, 'RH', 'Rh_2d', location=location_fig, plot_2d=True)

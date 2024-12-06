@@ -48,10 +48,10 @@ V = fem.functionspace(domain, ("Lagrange", 1))
 W = fem.functionspace(domain, ("Lagrange", 1, (domain.geometry.dim, ))) # Lagrange 2 in documentation
 DG0 = fem.functionspace(domain, ("DG", 0))
 
-# def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
-#     return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
 def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
-    return (x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2
+    return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
+# def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
+#     return (x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2
 
 def velocity_field(x):
     return np.array([-2*np.pi*x[1], 2*np.pi*x[0]])
@@ -176,6 +176,8 @@ L_h = h_DG * v * ufl.dx
 problem = LinearProblem(a_h, L_h, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
 h_CG = problem.solve() # returns dolfinx.fem.Function
 
+pde.plot_pv(domain, hmax, uh, "", "cont_initial", location_figures, plot_2d=False)
+
 """ Take on GFEM step for residual calculation """
 t += dt
 
@@ -260,5 +262,5 @@ if PLOT:
     plotter.close()
 xdmf.close()
 
-pde.plot_pv_2d(domain, mesh_size, uh, f'Solution at t = {T} with RV', 'lin_adv_rv', location_figures)
-pde.plot_pv_3d(domain, mesh_size, uh, f'Solution at t = {T} with RV', 'lin_adv_rv_3d', location_figures)
+pde.plot_pv(domain, mesh_size, uh, f'Solution at t = {T} with RV', 'lin_adv_cont_rv', location_figures, plot_2d=True)
+pde.plot_pv(domain, mesh_size, uh, f'Solution at t = {T} with RV', 'lin_adv_cont_rv_3d', location_figures)
