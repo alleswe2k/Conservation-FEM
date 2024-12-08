@@ -1,11 +1,7 @@
-""" The working version! """
-""" TODO: Try assembling static part and adding dynamic part in loop """
 import matplotlib as mpl
 import pyvista
 import ufl
 import numpy as np
-import matplotlib.pyplot as plt
-from tqdm import tqdm
 
 from petsc4py import PETSc
 from mpi4py import MPI
@@ -16,15 +12,11 @@ from dolfinx.io import gmshio
 from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, LinearProblem
 
-from Utils.PDE_plot import PDE_plot
-
-import os
-script_dir = os.path.dirname(os.path.abspath(__file__))
-location_figures = os.path.join(script_dir, 'Figures/SI')
-
 L2_errors = []
 hmaxes = [1/4, 1/8, 1/16, 1/32]
 for hmax in hmaxes:
+    # Enable or disable real-time plotting
+    PLOT = False
     # Creating mesh
     gmsh.initialize()
 
@@ -46,11 +38,12 @@ for hmax in hmaxes:
     # domain.geometry.dim = (2, )
     W = fem.functionspace(domain, ("Lagrange", 1, (domain.geometry.dim, ))) # Lagrange 2 in documentation
     DG0 = fem.functionspace(domain, ("DG", 0))
+    DG1 = fem.functionspace(domain, ("DG", 1))
 
-    def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
-        return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
     # def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
-    #     return (x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2
+    #     return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
+    def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
+        return (x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2
 
     def velocity_field(x):
         return np.array([-2*np.pi*x[1], 2*np.pi*x[0]])
@@ -84,7 +77,7 @@ for hmax in hmaxes:
     dt = CFL*hmax/w_inf_norm
     num_steps = int(np.ceil(T/dt))
     Cvel = 0.25
-    CRV = 1.0
+    Cm = 0.5
 
     # Create boundary condition
     fdim = domain.topology.dim - 1
@@ -96,6 +89,7 @@ for hmax in hmaxes:
     uh = fem.Function(V)
     uh.name = "uh"
     uh.interpolate(initial_condition)
+    # xdmf.write_function(uh, t)
 
     # Variational problem and solver
     u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
@@ -119,6 +113,26 @@ for hmax in hmaxes:
     solver.setOperators(A)
     solver.setType(PETSc.KSP.Type.PREONLY)
     solver.getPC().setType(PETSc.PC.Type.LU)
+
+    # Visualization of time dep. problem using pyvista
+    if PLOT:
+        # pyvista.start_xvfb()
+
+        grid = pyvista.UnstructuredGrid(*plot.vtk_mesh(V))
+
+        plotter = pyvista.Plotter()
+        plotter.open_gif("RV_node.gif", fps=10)
+
+        grid.point_data["uh"] = uh.x.array
+        warped = grid.warp_by_scalar("uh", factor=1)
+
+        viridis = mpl.colormaps.get_cmap("viridis").resampled(25)
+        sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
+                    position_x=0.1, position_y=0.8, width=0.8, height=0.1)
+
+        renderer = plotter.add_mesh(warped, show_edges=True, lighting=False,
+                                    cmap=viridis, scalar_bar_args=sargs,
+                                    clim=[0, max(uh.x.array)])
 
     """ First, project hk in DG(0) on h_h in Lagrange(1) """
     h_DG = fem.Function(DG0)  # Cell-based function for hk values
@@ -149,6 +163,25 @@ for hmax in hmaxes:
     problem = LinearProblem(a_h, L_h, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
     h_CG = problem.solve() # returns dolfinx.fem.Function
 
+    """ Creat patch dictionary """
+    # Dictionary to store adjacent nodes for each node
+    node_patches = {}
+
+    # Loop over each cell to build node adjacency information
+    for cell in range(domain.topology.index_map(domain.topology.dim).size_local):
+        cell_nodes = V.dofmap.cell_dofs(cell)
+        for node in cell_nodes:
+            if node not in node_patches:
+                node_patches[node] = set()
+            # Add all other nodes in this cell to the patch of the current node
+            # node_patches[node].update(n for n in cell_nodes if n != node)
+            node_patches[node].update(n for n in cell_nodes)
+
+    """ Assemble stiffness matrix, obtain element values """
+    a = ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
+    A = assemble_matrix(fem.form(a), bcs=[bc])
+    A.assemble()
+
     """ Take on GFEM step for residual calculation """
     t += dt
 
@@ -169,8 +202,8 @@ for hmax in hmaxes:
     # Update solution at previous time step (u_n)
     u_n.x.array[:] = uh.x.array
 
-    """ Then time loop """
-    for i in tqdm(range(num_steps-1)):
+    # """ Then time loop """
+    for i in range(num_steps-1):
         t += dt
 
         a_R = u * v * ufl.dx
@@ -183,14 +216,36 @@ for hmax in hmaxes:
 
         epsilon = fem.Function(V)
 
-        for node in range(Rh.x.array.size):
+        # for node in range(Rh.x.array.size):
+        #     hi = h_CG.x.array[node]
+        #     Ri = Rh.x.array[node]
+        #     w_values = w.x.array.reshape((-1, domain.geometry.dim))
+        #     fi = w_values[node]
+        #     fi_norm = np.linalg.norm(fi)
+        #     epsilon.x.array[node] = min(Cvel * hi * fi_norm, CRV * hi ** 2 * np.abs(Ri))
+        for node, adjacent_nodes in node_patches.items():
+            # node = i and adjacent_nodes (including self) = j
+            # print("Node:", node, " - Adjacent nodes:", adjacent_nodes)
             hi = h_CG.x.array[node]
-            Ri = Rh.x.array[node]
             w_values = w.x.array.reshape((-1, domain.geometry.dim))
             fi = w_values[node]
             fi_norm = np.linalg.norm(fi)
-            epsilon.x.array[node] = min(Cvel * hi * fi_norm, CRV * hi ** 2 * np.abs(Ri))
 
+            numerator = 0
+            denominator = 0
+            for adj_node in adjacent_nodes:
+                # print(adj_node)
+                # print(A.getValue(node, adj_node))
+                beta = A.getValue(node, adj_node)
+                numerator += beta * (u_n.x.array[adj_node] - u_n.x.array[node])
+                denominator += np.abs(beta) * np.abs(u_n.x.array[adj_node] - u_n.x.array[node])
+            # if denominator == 0:
+            #     alpha = 0
+            # else:
+            # TODO: Check if 1e-8 is correct (do we have double precision aritchmetic)
+            alpha = np.abs(numerator) / max(denominator, 1e-8)
+            # print('Numerator:', np.abs(numerator), ' - Denominator:', denominator, ' - Alpha:', alpha)
+            epsilon.x.array[node] = alpha * Cm * hi * fi_norm
 
         a = u * v * ufl.dx + 0.5 * dt * ufl.dot(w, ufl.grad(u)) * v * ufl.dx + 0.5 * epsilon * dt * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
         L = u_n * v * ufl.dx - 0.5 * dt * ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx - 0.5 * epsilon * dt * ufl.dot(ufl.grad(u_n), ufl.grad(v)) * ufl.dx
@@ -225,6 +280,16 @@ for hmax in hmaxes:
         # Update solution at previous time step (u_n)
         u_n.x.array[:] = uh.x.array
 
+        # Update plot
+        if PLOT:
+            new_warped = grid.warp_by_scalar("uh", factor=1)
+            warped.points[:, :] = new_warped.points
+            warped.point_data["uh"][:] = uh.x.array
+            plotter.write_frame()
+
+    if PLOT:
+        plotter.close()
+
     # Compute L2 error and error at nodes
     error_L2 = np.sqrt(domain.comm.allreduce(fem.assemble_scalar(fem.form((uh - u_ex)**2 * ufl.dx)), op=MPI.SUM))
     if domain.comm.rank == 0:
@@ -237,10 +302,3 @@ for hmax in hmaxes:
 print(f'L2-errors:{L2_errors}')
 fitted_error = np.polyfit(np.log10(hmaxes), np.log10(L2_errors), 1)
 print(f'convergence: {fitted_error[0]}')
-
-pde = PDE_plot()
-pde.plot_convergence(L2_errors, 'RV-Nodal', 'rv_conv', location_figures)
-
-
-
-

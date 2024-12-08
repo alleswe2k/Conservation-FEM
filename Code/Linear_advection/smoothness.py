@@ -53,10 +53,15 @@ V = fem.functionspace(domain, ("Lagrange", 1))
 W = fem.functionspace(domain, ("Lagrange", 1, (domain.geometry.dim, ))) # Lagrange 2 in documentation
 DG0 = fem.functionspace(domain, ("DG", 0))
 
+""" KPP IC """
 # def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
 #     return ((x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2) * 14*np.pi + ((x[0] - x0_1)**2 + (x[1] - x0_2)**2 > r0**2) * np.pi / 4
+""" Discont. IC """
 def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
     return (x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2
+""" Cont. IC """
+# def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
+#     return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
 
 def velocity_field(x):
     return np.array([-2*np.pi*x[1], 2*np.pi*x[0]])
@@ -86,8 +91,9 @@ T = 1.0  # Final time
 dt = CFL*hmax/w_inf_norm
 num_steps = int(np.ceil(T/dt))
 Cm = 0.5
+eps = 1e-8
 
-si = SI(Cm, domain)
+si = SI(Cm, domain, eps)
 
 # Create boundary condition
 fdim = domain.topology.dim - 1
