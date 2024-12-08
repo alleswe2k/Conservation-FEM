@@ -1,0 +1,39 @@
+
+P1 = FiniteElement("Lagrange", triangle, 1)
+P3 = FiniteElement("Lagrange", triangle, 3)
+
+u = TrialFunction(P1)
+v  = TestFunction(P1)
+
+u0 = Coefficient(P1)
+u_ex = Coefficient(P3)
+alpha = Coefficient(P1)
+k = Constant(triangle)
+
+h = CellDiameter(triangle)
+
+def flux(w,w0):
+    return as_vector([0.5*w0*w, 0.5*w0*w])		# burger
+#    return as_vector([w, 0])				# advection
+
+def fluxp(w):
+    return as_vector([w, w])				# burger
+#    return as_vector([1, 0])				# advection
+
+eps = alpha * (0.5 * h  * sqrt(inner(fluxp(u0), fluxp(u0)))) 
+
+
+###
+a = u*v*dx \
+    + k * 0.5 * div(flux(u,u0)) * v * dx \
+    + k * 0.5 * eps * inner(grad(u), grad(v)) * dx
+
+L = u0*v*dx \
+    - k * 0.5 * div(flux(u0,u0)) * v * dx \
+    - k * 0.5 * eps * inner(grad(u0), grad(v)) * dx
+
+###
+L1 = abs(u0 - u_ex) * dx
+L2 = (u0 - u_ex) * (u0 - u_ex) * dx
+
+forms = [a, L, L1, L2]
