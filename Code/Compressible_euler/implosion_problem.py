@@ -38,7 +38,7 @@ gmsh.model.occ.synchronize()
 gdim = 2
 gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
-fraction = 4
+fraction = 128
 hmax = 1/fraction # 0.05 in example
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
@@ -183,6 +183,8 @@ F2 = ufl.dot(m_trial, m_test) * ufl.dx - 0.5 * dt * ufl.dot(ufl.dot(u_n, ufl.gra
 F2 -= ufl.dot(m_n, m_test) * ufl.dx + 0.5 * dt * ufl.dot(ufl.dot(u_n, ufl.grad(m_test)), m_n) * ufl.dx
 a2 = fem.form(ufl.lhs(F2))
 L2 = fem.form(ufl.rhs(F2))
+
+
 
 A2 = assemble_matrix(a2, bcs=[bc_noslip])
 A2.assemble()

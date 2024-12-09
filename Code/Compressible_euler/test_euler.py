@@ -41,7 +41,7 @@ gmsh.model.occ.synchronize()
 gdim = 2
 gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
-fraction = 32
+fraction = 128
 hmax = 1/fraction # 0.05 in example
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
@@ -79,38 +79,34 @@ def init_density(x):
     inside = np.abs(x[0]) + np.abs(x[1]) <= radius
     return np.where(inside, p_in, p_out)
 
-# def reflecting_bc(x):
-#     n = fem.Function(V)
-#     n_x = x[0] / np.sqrt(x[0] ** 2 + x[1] ** 2)
-#     n_y = x[1] / np.sqrt(x[0] ** 2 + x[1] ** 2)
-#     return np.array([n_x, n_y])
-
-# reflecting_bc = ufl.FacetNormal(domain)
-
-# def reflect_velocity(u, n):
-#     return u - 2 * ufl.dot(u, n) * n
-
-
 V = fem.functionspace(domain, ("Lagrange", 1, (domain.geometry.dim, ))) # Vector valued function space
 Q = fem.functionspace(domain, ("Lagrange", 1)) # Scalar valued function space
 
 def walls(x):
-    return np.logical_or(np.isclose(x[1], -0.3), np.isclose(x[1], 0.3))
+    return np.logical_or.reduce((
+        np.isclose(x[1], -0.3),  # Bottom wall
+        np.isclose(x[1], 0.3),   # Top wall
+        np.isclose(x[0], -0.3),  # Left wall
+        np.isclose(x[0], 0.3)    # Right wall
+    ))
 
+n = ufl.FacetNormal(domain)
 wall_dofs = fem.locate_dofs_geometrical(V, walls)
-u_noslip = np.array((0,) * domain.geometry.dim, dtype=PETSc.ScalarType)
-bc_noslip = fem.dirichletbc(u_noslip, wall_dofs, V)
+
+def reflecting_bc(x):
+    return x - 2 * ufl.dot(x, n) * n
 
 rho_n = fem.Function(Q)
-m_n = fem.Function(V)
+mx_n = fem.Function(Q)
+my_n = fem.Function(Q)
 e_n = fem.Function(Q)
 
 rho_n.interpolate(init_density)
-m_n.interpolate(lambda x: np.zeros((domain.geometry.dim, x.shape[1])))
+mx_n.interpolate(lambda x: np.zeros(x.shape[1]))
+my_n.interpolate(lambda x: np.zeros(x.shape[1]))
 e_n.interpolate(lambda x: np.ones(x.shape[1]))
 
 gamma = 1.4
-
 
 u_n = fem.Function(V)
 u_n.interpolate(lambda x: np.zeros((domain.geometry.dim, x.shape[1])))
@@ -123,23 +119,11 @@ T_n.interpolate(lambda x: np.ones(x.shape[1]))
 
 number_of_nodes = p_n.x.array.size
 
-def calc_physical_quantities():
-    m_vals = m_n.x.array.reshape((-1, domain.geometry.dim))
-    u_vals = np.zeros_like(m_vals)
 
-    for node in range(number_of_nodes):
-        rho_i = rho_n.x.array[node]
-        e_i = e_n.x.array[node]
-        m_i = m_vals[node]
-
-        u_vals[node] = m_i / rho_i
-        
-        T_i = e_i / rho_i - np.dot(u_vals[node], u_vals[node]) / 2
-        p_n.x.array[node] = (gamma - 1) * rho_i * T_i
-
-        T_n.x.array[node] = T_i
-    
-    u_n.x.array[:] = u_vals.flatten()
+def apply_slip_bc():
+    for dof in wall_dofs:
+        vector = u_n.x.array[dof * domain.geometry.dim : (dof + 1) * domain.geometry.dim]
+        u_n.x.array[dof * domain.geometry.dim : (dof + 1) * domain.geometry.dim] = vector * -1
 
 def cfl_cond():
     u_vals = u_n.x.array.reshape((-1, domain.geometry.dim))
@@ -156,18 +140,43 @@ rho_h = fem.Function(Q)
 rho_h.name = 'rho_h'
 rho_h.x.array[:] = rho_n.x.array
 
-m_h = fem.Function(V)
-m_h.name = 'm_h'
-m_h.x.array[:] = m_n.x.array
+mx_h = fem.Function(Q)
+mx_h.name = 'mx_h'
+mx_h.x.array[:] = mx_n.x.array
+
+my_h = fem.Function(Q)
+my_h.name = 'my_h'
+my_h.x.array[:] = my_n.x.array
 
 e_h = fem.Function(Q)
 e_h.name = 'e_h'
 e_h.x.array[:] = e_n.x.array
 
+def calc_physical_quantities():
+    u_vals = u_n.x.array.reshape((-1, domain.geometry.dim))
+    print(u_vals)
+
+    for node in range(number_of_nodes):
+        rho_i = 0.5 * (rho_n.x.array[node] + rho_h.x.array[node])
+        e_i = 0.5 * (e_n.x.array[node] + e_h.x.array[node])
+        mx_i = 0.5 * (mx_n.x.array[node] + mx_h.x.array[node])
+        my_i = 0.5 * (my_n.x.array[node] + my_h.x.array[node])
+        print(u_vals[node][1])
+        u_vals[node][0] = mx_i / rho_i
+        u_vals[node][1] = my_i / rho_i
+        
+        T_i = e_i / rho_i - np.dot(u_vals[node], u_vals[node]) / 2
+        p_n.x.array[node] = (gamma - 1) * rho_i * T_i
+
+        T_n.x.array[node] = T_i
+    
+    u_n.x.array[:] = u_vals.flatten()
+
 rho_trial, rho_test = ufl.TrialFunction(Q), ufl.TestFunction(Q)
-m_trial, m_test = ufl.TrialFunction(V), ufl.TestFunction(V)
+mx_trial, mx_test = ufl.TrialFunction(Q), ufl.TestFunction(Q)
+my_trial, my_test = ufl.TrialFunction(Q), ufl.TestFunction(Q)
 e_trial, e_test = ufl.TrialFunction(Q), ufl.TestFunction(Q)
- 
+
 
 # Formulation for density
 F1 = (rho_trial * rho_test * ufl.dx -
@@ -177,9 +186,30 @@ F1 = (rho_trial * rho_test * ufl.dx -
 a1 = fem.form(ufl.lhs(F1))
 L1 = fem.form(ufl.rhs(F1))
 
-A1 = assemble_matrix(a1, bcs=[bc_noslip])
+A1 = assemble_matrix(a1)
 A1.assemble()
 b1 = create_vector(L1)
+
+# Formulation for momentum
+F2 = ufl.dot(mx_trial, mx_test) * ufl.dx - 0.5 * dt * ufl.dot(ufl.dot(u_n, ufl.grad(mx_test)), mx_trial) * ufl.dx - dt * p_n * ufl.div(mx_test) * ufl.dx
+F2 -= ufl.dot(mx_n, mx_test) * ufl.dx + 0.5 * dt * ufl.dot(ufl.dot(u_n, ufl.grad(mx_test)), mx_n) * ufl.dx
+a2 = fem.form(ufl.lhs(F2))
+L2 = fem.form(ufl.rhs(F2))
+
+A2 = assemble_matrix(a2)
+A2.assemble()
+b2 = create_vector(L2)
+
+
+# Formulation for energy
+F3 = e_trial * e_test * ufl.dx - 0.5 * dt * ufl.dot(u_n, ufl.grad(e_test)) * e_trial * ufl.dx + dt * ufl.div(ufl.outer(u_n, p_n)) * e_test * ufl.dx
+F3 -= e_n * e_test * ufl.dx + 0.5 * dt * ufl.dot(u_n, ufl.grad(e_test)) * e_n * ufl.dx
+a3 = fem.form(ufl.lhs(F3))
+L3 = fem.form(ufl.rhs(F3))
+
+A3 = assemble_matrix(a3)
+A3.assemble()
+b3 = create_vector(L3)
 
 # Solver for density
 solver1 = PETSc.KSP().create(domain.comm)
@@ -189,42 +219,46 @@ pc1 = solver1.getPC()
 pc1.setType(PETSc.PC.Type.HYPRE)
 pc1.setHYPREType("boomeramg")
 
+# Solver for momentum
+solver2 = PETSc.KSP().create(domain.comm)
+solver2.setOperators(A2)
+solver2.setType(PETSc.KSP.Type.BCGS)
+pc2 = solver2.getPC()
+pc2.setType(PETSc.PC.Type.HYPRE)
+pc2.setHYPREType("boomeramg")
+
+# Solver for energy
+solver3 = PETSc.KSP().create(domain.comm)
+solver3.setOperators(A3)
+solver3.setType(PETSc.KSP.Type.CG)
+pc3 = solver3.getPC()
+pc3.setType(PETSc.PC.Type.SOR)
+
 T = 1
 t = 0
-
-plot_grid()
 
 with b1.localForm() as loc_1:
     loc_1.set(0)
 assemble_vector(b1, L1)
-apply_lifting(b1, [a1], [[bc_noslip]])
 b1.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
-set_bc(b1, [bc_noslip])
 solver1.solve(b1, rho_h.x.petsc_vec)
 rho_h.x.scatter_forward()
+
+
+for dof in wall_dofs:
+    vector = u_n.x.array[dof * domain.geometry.dim : (dof + 1) * domain.geometry.dim]
+    u_n.x.array[dof * domain.geometry.dim : (dof + 1) * domain.geometry.dim] = vector * -1
+
+
+# print(u_n.x.array)
+# for dof in wall_dofs:
+#     u_n.x.array[dof] = reflecting_bc(u_n.x.array[dof])
+#     print(u_n.x.array[dof])
+#     print(reflecting_bc(u_n.x.array[dof]))
 
 print(rho_h.x.array)
 
 pde.plot_pv_2d(domain, fraction, rho_h, 'After one iteration', 'euler', location_figures)
-
-# while t < T:
-#     t += dt
-
-#     # Solving for density
-#     with b1.localForm() as loc_1:
-#         loc_1.set(0)
-#     assemble_vector(b1, L1)
-#     apply_lifting(b1, [a1], [[bc_noslip]])
-#     b1.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
-#     set_bc(b1, [bc_noslip])
-#     solver1.solve(b1, rho_h.x.petsc_vec)
-#     rho_h.x.scatter_forward()
-
-
-#     rho_n.x.array[:] = rho_h.x.array
-
-#     calc_physical_quantities()
-#     dt = cfl_cond()
     
 
 
