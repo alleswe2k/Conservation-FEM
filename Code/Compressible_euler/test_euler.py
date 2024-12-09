@@ -30,6 +30,9 @@ location_data = os.path.join(script_dir, 'Data') # location = './Data'
 PLOT = False
 pde = PDE_plot()
 
+max_iterations = 10
+tolerance = 1e-2
+
 gmsh.initialize()
 
 membrane = gmsh.model.occ.addRectangle(-0.3,-0.3,0,0.6,0.6)
@@ -38,7 +41,7 @@ gmsh.model.occ.synchronize()
 gdim = 2
 gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
-fraction = 4
+fraction = 32
 hmax = 1/fraction # 0.05 in example
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
@@ -178,26 +181,6 @@ A1 = assemble_matrix(a1, bcs=[bc_noslip])
 A1.assemble()
 b1 = create_vector(L1)
 
-# Formulation for momentum
-F2 = ufl.dot(m_trial, m_test) * ufl.dx - 0.5 * dt * ufl.dot(ufl.dot(u_n, ufl.grad(m_test)), m_trial) * ufl.dx - dt * p_n * ufl.div(m_test) * ufl.dx
-F2 -= ufl.dot(m_n, m_test) * ufl.dx + 0.5 * dt * ufl.dot(ufl.dot(u_n, ufl.grad(m_test)), m_n) * ufl.dx
-a2 = fem.form(ufl.lhs(F2))
-L2 = fem.form(ufl.rhs(F2))
-
-A2 = assemble_matrix(a2, bcs=[bc_noslip])
-A2.assemble()
-b2 = create_vector(L2)
-
-# Formulation for energy
-F3 = e_trial * e_test * ufl.dx - 0.5 * dt * ufl.dot(u_n, ufl.grad(e_test)) * e_trial * ufl.dx + dt * ufl.div(ufl.outer(u_n, p_n)) * e_test * ufl.dx
-F3 -= e_n * e_test * ufl.dx + 0.5 * dt * ufl.dot(u_n, ufl.grad(e_test)) * e_n * ufl.dx
-a3 = fem.form(ufl.lhs(F3))
-L3 = fem.form(ufl.rhs(F3))
-
-A3 = assemble_matrix(a3, bcs=[bc_noslip])
-A3.assemble()
-b3 = create_vector(L3)
-
 # Solver for density
 solver1 = PETSc.KSP().create(domain.comm)
 solver1.setOperators(A1)
@@ -206,108 +189,42 @@ pc1 = solver1.getPC()
 pc1.setType(PETSc.PC.Type.HYPRE)
 pc1.setHYPREType("boomeramg")
 
-# Solver for momentum
-solver2 = PETSc.KSP().create(domain.comm)
-solver2.setOperators(A2)
-solver2.setType(PETSc.KSP.Type.BCGS)
-pc2 = solver2.getPC()
-pc2.setType(PETSc.PC.Type.HYPRE)
-pc2.setHYPREType("boomeramg")
-
-# Solver for energy
-solver3 = PETSc.KSP().create(domain.comm)
-solver3.setOperators(A3)
-solver3.setType(PETSc.KSP.Type.CG)
-pc3 = solver3.getPC()
-pc3.setType(PETSc.PC.Type.SOR)
-
 T = 1
 t = 0
 
-if PLOT:
-    # pyvista.start_xvfb()
+plot_grid()
 
-    grid = pv.UnstructuredGrid(*plot.vtk_mesh(V))
+with b1.localForm() as loc_1:
+    loc_1.set(0)
+assemble_vector(b1, L1)
+apply_lifting(b1, [a1], [[bc_noslip]])
+b1.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
+set_bc(b1, [bc_noslip])
+solver1.solve(b1, rho_h.x.petsc_vec)
+rho_h.x.scatter_forward()
 
-    plotter = pv.Plotter()
-    plotter.open_gif("euler.gif", fps=10)
+print(rho_h.x.array)
 
-    grid.point_data["rho_h"] = rho_h.x.array
-    warped = grid.warp_by_scalar("rho_h", factor=1)
+pde.plot_pv_2d(domain, fraction, rho_h, 'After one iteration', 'euler', location_figures)
 
-    viridis = mpl.colormaps.get_cmap("viridis").resampled(25)
-    sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
-                position_x=0.1, position_y=0.8, width=0.8, height=0.1)
+# while t < T:
+#     t += dt
 
-    renderer = plotter.add_mesh(warped, show_edges=True, lighting=False,
-                                cmap=viridis, scalar_bar_args=sargs,
-                                clim=[min(rho_h.x.array), max(rho_h.x.array)])
-    plotter.view_xy()
-
-while t < T:
-    t += dt
-
-    # Solving for density
-    with b1.localForm() as loc_1:
-        loc_1.set(0)
-    assemble_vector(b1, L1)
-    apply_lifting(b1, [a1], [[bc_noslip]])
-    b1.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
-    set_bc(b1, [bc_noslip])
-    solver1.solve(b1, rho_h.x.petsc_vec)
-    rho_h.x.scatter_forward()
-
-    # Solving for momentum
-    with b2.localForm() as loc_2:
-        loc_2.set(0)
-    assemble_vector(b2, L2)
-    apply_lifting(b2, [a2], [[bc_noslip]])
-    b2.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
-    set_bc(b2, [bc_noslip])
-    solver2.solve(b2, m_h.x.petsc_vec)
-    m_h.x.scatter_forward()
-
-    # Solving for energy
-    with b3.localForm() as loc_3:
-        loc_3.set(0)
-    assemble_vector(b3, L3)
-    apply_lifting(b3, [a3], [[bc_noslip]])
-    b3.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
-    set_bc(b3, [bc_noslip])
-    solver3.solve(b3, e_h.x.petsc_vec)
-    e_h.x.scatter_forward()    
-
-    rho_n.x.array[:] = rho_h.x.array
-    m_n.x.array[:] = m_h.x.array
-    e_n.x.array[:] = e_h.x.array
-
-    calc_physical_quantities()
-    dt = cfl_cond()
-    print("Rho: ", rho_n.x.array)
-    print("M: ", m_n.x.array)
-    print("Vel: ", u_n.x.array)
-
-    if PLOT:
-        new_warped = grid.warp_by_scalar("rho_h", factor=1)
-        warped.points[:, :] = new_warped.points
-        warped.point_data["rho_h"][:] = rho_h.x.array
-        plotter.write_frame()
+#     # Solving for density
+#     with b1.localForm() as loc_1:
+#         loc_1.set(0)
+#     assemble_vector(b1, L1)
+#     apply_lifting(b1, [a1], [[bc_noslip]])
+#     b1.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
+#     set_bc(b1, [bc_noslip])
+#     solver1.solve(b1, rho_h.x.petsc_vec)
+#     rho_h.x.scatter_forward()
 
 
-solver1.destroy()
-solver2.destroy()
-solver3.destroy()
+#     rho_n.x.array[:] = rho_h.x.array
 
-A1.destroy()
-A2.destroy()
-A3.destroy()
-
-b1.destroy()
-b2.destroy()
-b3.destroy()
-
-gmsh.finalize()
+#     calc_physical_quantities()
+#     dt = cfl_cond()
     
-
 
 
