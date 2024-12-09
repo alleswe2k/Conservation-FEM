@@ -152,9 +152,22 @@ h_CG = get_nodal_h(domain)
 u_exact_boundary = fem.Function(V)
 u_exact_boundary.interpolate(lambda x: exact_solution(x, 1e-8))
 bc = fem.dirichletbc(u_exact_boundary, boundary_dofs)
-a = ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
+a = u * v * ufl.dx # dt = 0, just mass matrix
 A = assemble_matrix(fem.form(a), bcs=[bc])
 A.assemble()
+# Open a file to write the matrix
+with open("matrix_python.txt", "w") as file:
+    # Get the PETSc matrix
+    mat = A
+    print(mat.getSize())
+
+    # Get non-zero entries as triplets (row, col, value)
+    for row in range(mat.getSize()[0]):  # Loop over all rows
+        cols, values = mat.getRow(row)  # Get non-zero entries in the row
+        for col, value in zip(cols, values):
+            file.write(f"{row} {col} {value}\n")
+
+print("Matrix saved to matrix_python.txt")
 epsilon = si.get_epsilon(velocity_field, node_patches, h_CG, u_n, A, plot_func)
 
 for i in tqdm(range(num_steps)):
@@ -167,10 +180,9 @@ for i in tqdm(range(num_steps)):
     bc = fem.dirichletbc(u_exact_boundary, boundary_dofs)
 
     """ Assemble stiffness matrix, obtain element values """
-    a = ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
-    # a = u*v *ufl.dx
-    A = assemble_matrix(fem.form(a), bcs=[bc])
-    A.assemble()
+    # a = ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
+    # A = assemble_matrix(fem.form(a), bcs=[bc])
+    # A.assemble()
 
     # A_numpy = A.getValuesCSR()[::-1]  # Get CSR values (row indices, col indices, and data)
     # data, rows, cols = A_numpy
@@ -186,6 +198,11 @@ for i in tqdm(range(num_steps)):
         0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx + 
         0.5*dt*epsilon*ufl.dot(ufl.grad(uh), ufl.grad(v))*ufl.dx +
         0.5*dt*epsilon*ufl.dot(ufl.grad(u_n), ufl.grad(v))*ufl.dx)
+    
+    # a = fem.form(ufl.lhs(F))
+    a = u * v * ufl.dx + 0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(u))*v*ufl.dx + 0.5*dt*epsilon*ufl.dot(ufl.grad(u), ufl.grad(v))*ufl.dx
+    A = assemble_matrix(fem.form(a), bcs=[bc])
+    A.assemble()
     
     problem = NonlinearProblem(F, uh, bcs = [bc])
     solver = NewtonSolver(MPI.COMM_WORLD, problem)
