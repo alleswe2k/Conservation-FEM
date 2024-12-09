@@ -328,7 +328,7 @@ int main(int argc, char *argv[])
 
   Point point0(xmin, ymin);
   Point point1(xmax, ymax);
-  int N = 300;
+  int N = 100;
 
   for (int i = 0; i < 1; ++i)
     {
@@ -427,7 +427,7 @@ int main(int argc, char *argv[])
 	  ksolver.solve(*A, *u->vector(), b);
 
 	  /// make solution a bit smoother
-	  apply_smoothing(*A, *u);
+	  // apply_smoothing(*A, *u);
 
 	  /// only for Burger
 	  u_ex->interpolate(*burger_exact);

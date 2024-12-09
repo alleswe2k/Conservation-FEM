@@ -1,0 +1,3 @@
+/home/robindymer/Kod/Conservation-FEM/burger/CMakeFiles/demo.dir
+/home/robindymer/Kod/Conservation-FEM/burger/CMakeFiles/edit_cache.dir
+/home/robindymer/Kod/Conservation-FEM/burger/CMakeFiles/rebuild_cache.dir

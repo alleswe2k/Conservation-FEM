@@ -166,6 +166,8 @@ for i in range(num_steps):
     a = u * v * ufl.dx + 0.5 * dt * ufl.dot(w, ufl.grad(u)) * v * ufl.dx + 0.5 * epsilon * dt * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
     L = u_n * v * ufl.dx - 0.5 * dt * ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx - 0.5 * epsilon * dt * ufl.dot(ufl.grad(u_n), ufl.grad(v)) * ufl.dx
 
+    # stiffness_matrix = assemble_matrix(fem.form(a), bcs=[bc])
+    # stiffness_matrix.assemble()
     # Preparing linear algebra structures for time dep. problems
     bilinear_form = fem.form(a)
     linear_form = fem.form(L)
