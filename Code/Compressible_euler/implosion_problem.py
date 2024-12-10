@@ -76,17 +76,6 @@ def init_density(x):
     inside = np.abs(x[0]) + np.abs(x[1]) <= radius
     return np.where(inside, p_in, p_out)
 
-# def reflecting_bc(x):
-#     n = fem.Function(V)
-#     n_x = x[0] / np.sqrt(x[0] ** 2 + x[1] ** 2)
-#     n_y = x[1] / np.sqrt(x[0] ** 2 + x[1] ** 2)
-#     return np.array([n_x, n_y])
-
-# reflecting_bc = ufl.FacetNormal(domain)
-
-# def reflect_velocity(u, n):
-#     return u - 2 * ufl.dot(u, n) * n
-
 
 V = fem.functionspace(domain, ("Lagrange", 1, (domain.geometry.dim, ))) # Vector valued function space
 Q = fem.functionspace(domain, ("Lagrange", 1)) # Scalar valued function space
