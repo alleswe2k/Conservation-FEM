@@ -15,6 +15,7 @@ from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, a
 from Utils.PDE_plot import PDE_plot
 from Utils.SI import SI
 from Utils.RV import RV
+from Utils.helpers import get_nodal_h
 
 import os
 script_dir = os.path.dirname(os.path.abspath(__file__))
