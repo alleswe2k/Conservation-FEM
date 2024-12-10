@@ -78,9 +78,10 @@ for mesh_size in mesh_sizes:
     domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [mesh_size, mesh_size], cell_type=mesh.CellType.triangle)
 
     V = fem.functionspace(domain, ("Lagrange", 1))
+    W = fem.functionspace(domain, ("Lagrange", 3))
     DG0 = fem.functionspace(domain, ("DG", 0))
 
-    u_exact = fem.Function(V)
+    u_exact = fem.Function(W)
     u_exact.name = "U Exact"
     u_exact.interpolate(exact_solution)
 

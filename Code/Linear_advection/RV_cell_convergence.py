@@ -37,7 +37,7 @@ for hmax in hmaxes:
     domain, cell_markers, facet_markers = gmshio.model_to_mesh(gmsh.model, mesh_comm, gmsh_model_rank, gdim=gdim)
 
     V = fem.functionspace(domain, ("Lagrange", 1))
-    # domain.geometry.dim = (2, )
+    V_ex = fem.functionspace(domain, ("Lagrange", 3))
     W = fem.functionspace(domain, ("Lagrange", 1, (domain.geometry.dim, ))) # Lagrange 2 in documentation
 
     # def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
@@ -56,7 +56,7 @@ for hmax in hmaxes:
     u_old.name = "u_old"
     u_old.interpolate(initial_condition)
 
-    u_ex = fem.Function(V)
+    u_ex = fem.Function(V_ex)
     u_ex.interpolate(initial_condition)
 
     # velocity field f_prim
