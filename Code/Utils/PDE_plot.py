@@ -79,15 +79,15 @@ class PDE_plot():
         # Add a denser grid
         plt.grid(which='both', linestyle='--', linewidth=0.5)
         # Add a text below legend that displays the convergence
-        legend_box = plt.legend()
+        legend_box = plt.legend(fontsize=12)
         txt = mpl.offsetbox.TextArea(f"Convergence: {fit[0]:.2f}")
         box = legend_box._legend_box
         box.get_children().append(txt)
         box.set_figure(box.figure)
 
-        plt.xlabel("Mesh size")
-        plt.ylabel(r"$||e||$")
-        plt.title(f'Convergence for {title}')
+        plt.xlabel("Mesh size", fontsize=14)
+        plt.ylabel(r"$||e||$", fontsize=14)
+        plt.title(f'Convergence for {title}', fontsize=18)
         plt.tight_layout()
 
         # Save the plot
