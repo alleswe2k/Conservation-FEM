@@ -29,7 +29,7 @@ class SI:
 
     def sigmoid_activation(self, alpha):
         s = 20.0
-        x0 = 0.5
+        x0 = 0.9
         return 1.0 / (1.0 + np.exp(-s*(alpha - x0)))
 
     def get_epsilon_nonlinear(self, velocity_field, node_patches, h_CG, u_n, stiffness_matrix, plot_func):
@@ -91,6 +91,55 @@ class SI:
         return epsilon
     
     """ Alternative: Iterate through stiffness matrix instead of patches """
+    # def get_epsilon_nonlinear(self, velocity_field, node_patches, h_CG, u_n, stiffness_matrix, plot_func):
+    #     # Create a function to store epsilon
+    #     V = fem.functionspace(self.domain, ("Lagrange", 1))
+    #     epsilon = fem.Function(V)
+    #     epsilon_array = epsilon.x.petsc_vec  # Direct array access for efficiency
+
+    #     # Access stiffness matrix as PETSc Mat
+    #     mat = stiffness_matrix
+    #     start, end = mat.getOwnershipRange()
+
+    #     # Extract array data
+    #     u_values = u_n.x.array
+    #     # w_values = w.x.array.reshape((-1, self.domain.geometry.dim))
+    #     h_values = h_CG.x.array
+
+    #     # Loop through rows corresponding to local nodes
+    #     for row in range(start, end):
+    #         cols, bij = mat.getRow(row)  # Retrieve non-zero entries
+    #         node = row
+    #         hi = h_values[node]
+    #         w = velocity_field(u_n.x.array[node])
+    #         fi = np.array(w, dtype = 'float')
+    #         fi_norm = np.linalg.norm(fi)
+
+    #         numerator = 0.0
+    #         denominator = 0.0
+
+    #         nonzero_mask = bij != 0
+    #         cols = cols[nonzero_mask]
+    #         bij = bij[nonzero_mask]
+
+    #         for idx, adj_node in enumerate(cols):
+    #             if node != adj_node:  # Ignore diagonal entries
+    #                 delta_u = u_values[adj_node] - u_values[node]
+    #                 beta = bij[idx]
+
+    #                 numerator += beta * delta_u
+    #                 denominator += abs(beta) * abs(delta_u)
+
+    #         numerator = abs(numerator)
+    #         denominator = max(denominator, self.eps)
+    #         alpha = numerator / denominator
+    #         alpha_psi = self.sigmoid_activation(alpha)
+    #         plot_func.x.array[node] = alpha_psi
+
+    #         # Store computed epsilon
+    #         epsilon_array[node] = alpha_psi * self.Cm * hi * fi_norm
+
+    #     return epsilon
     # def get_epsilon_linear(self, w, node_patches, h_CG, u_n, stiffness_matrix, numerator_func):
     #     # Create a function to store epsilon
     #     V = fem.functionspace(self.domain, ("Lagrange", 1))
