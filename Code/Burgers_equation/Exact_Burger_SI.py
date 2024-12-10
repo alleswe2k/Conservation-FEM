@@ -95,7 +95,7 @@ dt = 0.01
 num_steps = int(np.ceil(T/dt))
 Cm = 0.5
 
-si = SI(Cm, domain)
+si = SI(Cm, domain, 1e-6)
 
 """ Creat patch dictionary """
 node_patches = si.get_patch_dictionary()
@@ -159,7 +159,7 @@ for i in tqdm(range(num_steps)):
     A = assemble_matrix(fem.form(a), bcs=[bc])
     A.assemble()
 
-    epsilon = si.get_epsilon(velocity_field, node_patches, h_CG, u_n, A)
+    epsilon = si.get_epsilon_nonlinear(velocity_field, node_patches, h_CG, u_n, A)
     
     F = (uh*v *ufl.dx - u_n*v *ufl.dx + 
         0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
