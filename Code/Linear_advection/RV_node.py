@@ -12,7 +12,8 @@ from dolfinx.io import gmshio
 from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, LinearProblem
 
-from Utils.helpers import get_nodal_h
+from Utils.PDE_plot import PDE_plot
+from Utils.SI import SI
 from Utils.RV import RV
 
 import os
@@ -21,7 +22,8 @@ location_figures = os.path.join(script_dir, 'Figures/RV')
 location_data = os.path.join(script_dir, 'Data/RV/solution.xdmf')
 
 # Enable or disable real-time plotting
-PLOT = True
+pde = PDE_plot()
+PLOT = False
 # Creating mesh
 gmsh.initialize()
 
@@ -31,7 +33,8 @@ gmsh.model.occ.synchronize()
 gdim = 2
 gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
-hmax = 1/32 # 0.05 in example
+mesh_size = 32
+hmax = 1/mesh_size
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
 gmsh.model.mesh.generate(gdim)
@@ -82,6 +85,10 @@ Cvel = 0.25
 CRV = 4.0
 
 rv = RV(Cvel, CRV, domain)
+
+si = SI(1, domain)
+rv = RV(Cvel, CRV, domain)
+node_patches = si.get_patch_dictionary()
 
 # Create boundary condition
 fdim = domain.topology.dim - 1
@@ -196,9 +203,10 @@ for i in range(num_steps-1):
     # Solve linear system
     problem = LinearProblem(a_R, L_R, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
     Rh = problem.solve() # returns dolfinx.fem.Function
-    Rh.x.array[:] = Rh.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
+    #Rh.x.array[:] = Rh.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
 
-    epsilon = rv.get_epsilon_linear(w, Rh, h_CG)
+    #epsilon = fem.Function(V)
+    epsilon = rv.get_epsilon_linear(uh, u_n, w, Rh, h_CG, node_patches)
 
     a = u * v * ufl.dx + 0.5 * dt * ufl.dot(w, ufl.grad(u)) * v * ufl.dx + 0.5 * epsilon * dt * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
     L = u_n * v * ufl.dx - 0.5 * dt * ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx - 0.5 * epsilon * dt * ufl.dot(ufl.grad(u_n), ufl.grad(v)) * ufl.dx
@@ -251,6 +259,5 @@ if PLOT:
     plotter.close()
 xdmf.close()
 
-error_L2 = np.sqrt(domain.comm.allreduce(fem.assemble_scalar(fem.form((uh - u_ex)**2 * ufl.dx)), op=MPI.SUM))
-if domain.comm.rank == 0:
-    print(f"L2-error: {error_L2:.2e}")
+pde.plot_pv_2d(domain, mesh_size, uh, f'Solution at t = {T} with RV', 'lin_adv_rv', location_figures)
+pde.plot_pv_3d(domain, mesh_size, uh, f'Solution at t = {T} with RV', 'lin_adv_rv_3d', location_figures)

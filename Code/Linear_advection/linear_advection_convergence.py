@@ -11,8 +11,17 @@ from dolfinx.io import gmshio
 from dolfinx import fem, mesh
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc
 
+from Utils.PDE_plot import PDE_plot
+
+import os
+script_dir = os.path.dirname(os.path.abspath(__file__))
+location_figures = os.path.join(script_dir, 'Figures/GFEM') # location = './Figures'
+
+pde = PDE_plot()
+
 L2_errors = []
-hmaxes = [1/4, 1/8, 1/16, 1/32] 
+mesh_sizes = np.array([4, 8, 16, 32])
+hmaxes = 1/mesh_sizes
 for hmax in hmaxes:
     print(f'hmax: {hmax}')
 
@@ -38,9 +47,12 @@ for hmax in hmaxes:
     # domain.geometry.dim = (2, )
     W = fem.functionspace(domain, ("Lagrange", 1, (domain.geometry.dim, ))) # Lagrange 2 in documentation
 
+    # def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
+    #     return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
+    
     def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
-        return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
-
+        return (x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2
+    
     def velocity_field(x):
         return np.array([-2*np.pi*x[1], 2*np.pi*x[0]])
 
@@ -136,6 +148,5 @@ for hmax in hmaxes:
 
     gmsh.finalize()
 
-print(f'L2-errors:{L2_errors}')
-fitted_error = np.polyfit(np.log10(hmaxes), np.log10(L2_errors), 1)
-print(f'convergence: {fitted_error[0]}')
+pde.plot_convergence(L2_errors, mesh_sizes, 'linear advection', 'lin_adv_conv', location_figures)
+

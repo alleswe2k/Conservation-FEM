@@ -15,6 +15,8 @@ from dolfinx.nls.petsc import NewtonSolver
 
 from PDE_solver import PDE_solver
 from tqdm import tqdm
+from Utils.RV import RV
+from Utils.SI import SI
 
 
 pde_solve = PDE_solver()
@@ -72,6 +74,9 @@ num_steps = int(np.ceil(T/dt))
 Cvel = 0.25
 CRV = 1.0
 
+rv = RV(Cvel, CRV, domain)
+si = SI(1, domain)
+node_patches = si.get_patch_dictionary()
 
 # Create boundary condition
 fdim = domain.topology.dim - 1
@@ -182,17 +187,16 @@ for i in tqdm(range(num_steps -1)):
     n, converged = Rh_problem.solve(RH)
     # n, converged = Rh.solve(uh)
     # assert (converged)
-    RH.x.array[:] = RH.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
-    epsilon = fem.Function(V)
+    epsilon = rv.get_epsilon_nonlinear(uh, u_n, velocity_field, RH, h_CG, node_patches)
 
-    for node in range(RH.x.array.size):
-        hi = h_CG.x.array[node]
-        Ri = RH.x.array[node]
-        w = uh.x.array[node]
-        w = velocity_field(uh.x.array[node])
-        fi = np.array(w, dtype = 'float')
-        fi_norm = np.linalg.norm(fi)
-        epsilon.x.array[node] = min(Cvel * hi * fi_norm, CRV * hi ** 2 * np.abs(Ri))
+    # for node in range(RH.x.array.size):
+    #     hi = h_CG.x.array[node]
+    #     Ri = RH.x.array[node]
+    #     w = uh.x.array[node]
+    #     w = velocity_field(uh.x.array[node])
+    #     fi = np.array(w, dtype = 'float')
+    #     fi_norm = np.linalg.norm(fi)
+    #     epsilon.x.array[node] = min(Cvel * hi * fi_norm, CRV * hi ** 2 * np.abs(Ri))
     
     F = (uh*v *ufl.dx - u_n*v *ufl.dx + 
         0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 

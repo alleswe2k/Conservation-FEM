@@ -12,9 +12,11 @@ For all of the above, convergence rate is to be reported for mesh sizes 1/4, 1/8
 
 # Progression map
 
+## W.49
+We continued working on the report, including our progress in the results as well as writing in other sections as well. Apart from the writing, we started implementing a solver for the Euler system of equations in FEniCSx. We also had our mock presentation. 
+
 ## W.48
-We have been working on our presentation, and figuring out the structure of the report, what to include and what not. Moreover, we have been testing different normalization methods, debugging the smoothness indicator code
-as well as plotting everything that is necessary.
+We have been working on our presentation, and figuring out the structure of the report, what to include and what not. Moreover, we have been testing different normalization methods, debugging the smoothness indicator code as well as plotting everything that is necessary.
 
 ## W. 47 
 We have gone through the code and verified each part, the code now yields more accurate figures regarding the exact burgers and KPP. We have also tested the BDF2 method of calculating RH for burgers and KPP as well as a different approach of normalizing the residual. We went through our Github repo and restructured the folder for an easier time navigating it. 

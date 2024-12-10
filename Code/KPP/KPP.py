@@ -12,7 +12,11 @@ from dolfinx.io import gmshio
 from dolfinx import fem, mesh, io, plot, nls, log
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, NonlinearProblem
 from dolfinx.nls.petsc import NewtonSolver
+import os 
+script_dir = os.path.dirname(os.path.abspath(__file__))
 
+location_fig = os.path.join(script_dir, 'Figures/RV') # location = './Figures'
+location_data = os.path.join(script_dir, 'Data') # location = './Figures'
 
 PLOT = True
 gmsh.initialize()
@@ -90,7 +94,7 @@ if PLOT:
     grid = pyvista.UnstructuredGrid(*plot.vtk_mesh(V))
 
     plotter = pyvista.Plotter()
-    plotter.open_gif("Code/Nonlinear/KPP/Output/KPP.gif", fps=10)
+    plotter.open_gif(location_fig+"/KPP_nostab.gif", fps=10)
 
     grid.point_data["uh"] = uh.x.array
     warped = grid.warp_by_scalar("uh", factor=1)

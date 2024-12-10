@@ -11,6 +11,7 @@ from dolfinx.io import gmshio
 
 from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc
+from Utils.PDE_plot import PDE_plot
 
 import os
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -18,6 +19,7 @@ location_figures = os.path.join(script_dir, 'Figures/GFEM')
 location_data = os.path.join(script_dir, 'Data/GFEM/solution.xdmf')
 
 # Enable or disable real-time plotting
+pde = PDE_plot()
 PLOT = False
 
 # Creating mesh
@@ -29,7 +31,8 @@ gmsh.model.occ.synchronize()
 gdim = 2
 gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
-hmax = 1/32 # 0.05 in example
+mesh_size = 32
+hmax = 1/mesh_size
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
 gmsh.model.mesh.generate(gdim)
@@ -49,6 +52,9 @@ W = fem.functionspace(domain, ("Lagrange", 1, (domain.geometry.dim, ))) # Lagran
 
 def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
     return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
+
+# def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
+#     return (x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2
 
 def velocity_field(x):
     return np.array([-2*np.pi*x[1], 2*np.pi*x[0]])
@@ -95,6 +101,10 @@ uh = fem.Function(V)
 uh.name = "uh"
 uh.interpolate(initial_condition)
 # xdmf.write_function(uh, t)
+
+pde.plot_pv(domain, mesh_size, uh, 'Initial condition', 'init_cond_cont_IC', location_figures, plot_2d=True)
+pde.plot_pv(domain, mesh_size, uh, 'Initial condition', 'init_cond_cont_IC_3d', location_figures)
+
 
 # Variational problem and solver
 u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
@@ -175,10 +185,6 @@ if PLOT:
     plotter.close()
 xdmf.close()
 
-# V_ex = fem.functionspace(domain, ("Lagrange", 2)) # Might be more exact?
-# u_ex = fem.Function(V_ex)
-# u_ex.interpolate(initial_condition)
-# Compute L2 error and error at nodes
-error_L2 = np.sqrt(domain.comm.allreduce(fem.assemble_scalar(fem.form((uh - u_ex)**2 * ufl.dx)), op=MPI.SUM))
-if domain.comm.rank == 0:
-    print(f"L2-error: {error_L2:.2e}")
+pde.plot_pv(domain, mesh_size, uh, 'Solution 2d', 'lin_adv_sol_cont_IC', location_figures, plot_2d=True)
+pde.plot_pv(domain, mesh_size, uh, 'Solution 3d', 'lin_adv_sol_cont_IC_3d', location_figures)
+

@@ -17,6 +17,7 @@ from dolfinx.nls.petsc import NewtonSolver
 
 from Utils.PDE_plot import PDE_plot
 from Utils.RV import RV
+from Utils.SI import SI
 from Utils.helpers import get_nodal_h
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -75,6 +76,8 @@ Cvel = 0.5
 CRV = 4.0
 
 rv = RV(Cvel, CRV, domain)
+si = SI(1, domain)
+node_patches = si.get_patch_dictionary()
 
 # Create boundary condition
 fdim = domain.topology.dim - 1
@@ -113,9 +116,10 @@ if PLOT:
     sargs = dict(title_font_size=25, label_font_size=20, fmt="%.2e", color="black",
                 position_x=0.1, position_y=0.8, width=0.8, height=0.1)
 
-    renderer = plotter.add_mesh(warped, show_edges=True, lighting=False,
+    renderer = plotter.add_mesh(warped, show_edges=False, lighting=False,
                                 cmap=viridis, scalar_bar_args=sargs,
                                 clim=[0, max(uh.x.array)])
+
     
 
 h_CG = get_nodal_h(domain)
@@ -140,9 +144,7 @@ for i in tqdm(range(num_steps)):
 
     n, converged = Rh_problem.solve(RH)
 
-    RH.x.array[:] = RH.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
-
-    epsilon = rv.get_epsilon(uh, velocity_field, RH, h_CG)
+    epsilon = rv.get_epsilon_nonlinear(uh, u_n, velocity_field, RH, h_CG, node_patches)
  
     F = (uh*v *ufl.dx - u_n*v *ufl.dx + 
         0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
@@ -177,7 +179,6 @@ for i in tqdm(range(num_steps)):
 if PLOT:
     plotter.close()
 xdmf.close()
-
 
 pde.plot_pv_3d(domain, int(1/hmax), u_n, 'Solution uh', 'uh_3d', location=location_fig)
 pde.plot_pv_2d(domain, int(1/hmax), epsilon, 'Espilon', 'epsilon_2d', location=location_fig)

@@ -114,6 +114,11 @@ class SI:
         
         return epsilon
 
+    def sigmoid_activation(self, alpha):
+        s = 20.0
+        x0 = 0.5
+        return 1.0 / (1.0 + np.exp(-s*(alpha - x0)))
+
     def get_epsilon(self, velocity_field, node_patches, h_CG, u_n, A):
         V = fem.functionspace(self.domain, ("Lagrange", 1))
         epsilon = fem.Function(V)
