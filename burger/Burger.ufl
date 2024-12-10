@@ -32,8 +32,10 @@ L = u0*v*dx \
     - k * 0.5 * div(flux(u0,u0)) * v * dx \
     - k * 0.5 * eps * inner(grad(u0), grad(v)) * dx
 
+test = u*v*dx
+
 ###
 L1 = abs(u0 - u_ex) * dx
 L2 = (u0 - u_ex) * (u0 - u_ex) * dx
 
-forms = [a, L, L1, L2]
+forms = [a, L, L1, L2, test]

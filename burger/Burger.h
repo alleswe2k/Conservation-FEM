@@ -871,6 +871,24 @@ public:
 };
 
 
+class burger_cell_integral_4_otherwise: public ufc::cell_integral
+{
+public:
+
+  burger_cell_integral_4_otherwise();
+
+  ~burger_cell_integral_4_otherwise() override;
+
+  const std::vector<bool> & enabled_coefficients() const final override;
+
+  void tabulate_tensor(double * A,
+                       const double * const * w,
+                       const double * coordinate_dofs,
+                       int cell_orientation) const final override;
+
+};
+
+
 class burger_form_0: public ufc::form
 {
 public:
@@ -1157,6 +1175,99 @@ public:
   burger_form_3();
 
   ~burger_form_3() override;
+
+  const char * signature() const final override;
+
+  std::size_t rank() const final override;
+
+  std::size_t num_coefficients() const final override;
+
+  std::size_t original_coefficient_position(std::size_t i) const final override;
+
+  ufc::finite_element * create_coordinate_finite_element() const final override;
+
+  ufc::dofmap * create_coordinate_dofmap() const final override;
+
+  ufc::coordinate_mapping * create_coordinate_mapping() const final override;
+
+  ufc::finite_element * create_finite_element(std::size_t i) const final override;
+
+  ufc::dofmap * create_dofmap(std::size_t i) const final override;
+
+  std::size_t max_cell_subdomain_id() const final override;
+
+  std::size_t max_exterior_facet_subdomain_id() const final override;
+
+  std::size_t max_interior_facet_subdomain_id() const final override;
+
+  std::size_t max_vertex_subdomain_id() const final override;
+
+  std::size_t max_custom_subdomain_id() const final override;
+
+  std::size_t max_cutcell_subdomain_id() const final override;
+
+  std::size_t max_interface_subdomain_id() const final override;
+
+  std::size_t max_overlap_subdomain_id() const final override;
+
+  bool has_cell_integrals() const final override;
+
+  bool has_exterior_facet_integrals() const final override;
+
+  bool has_interior_facet_integrals() const final override;
+
+  bool has_vertex_integrals() const final override;
+
+  bool has_custom_integrals() const final override;
+
+  bool has_cutcell_integrals() const final override;
+
+  bool has_interface_integrals() const final override;
+
+  bool has_overlap_integrals() const final override;
+
+  ufc::cell_integral * create_cell_integral(std::size_t i) const final override;
+
+  ufc::exterior_facet_integral * create_exterior_facet_integral(std::size_t i) const final override;
+
+  ufc::interior_facet_integral * create_interior_facet_integral(std::size_t i) const final override;
+
+  ufc::vertex_integral * create_vertex_integral(std::size_t i) const final override;
+
+  ufc::custom_integral * create_custom_integral(std::size_t i) const final override;
+
+  ufc::cutcell_integral * create_cutcell_integral(std::size_t i) const final override;
+
+  ufc::interface_integral * create_interface_integral(std::size_t i) const final override;
+
+  ufc::overlap_integral * create_overlap_integral(std::size_t i) const final override;
+
+  ufc::cell_integral * create_default_cell_integral() const final override;
+
+  ufc::exterior_facet_integral * create_default_exterior_facet_integral() const final override;
+
+  ufc::interior_facet_integral * create_default_interior_facet_integral() const final override;
+
+  ufc::vertex_integral * create_default_vertex_integral() const final override;
+
+  ufc::custom_integral * create_default_custom_integral() const final override;
+
+  ufc::cutcell_integral * create_default_cutcell_integral() const final override;
+
+  ufc::interface_integral * create_default_interface_integral() const final override;
+
+  ufc::overlap_integral * create_default_overlap_integral() const final override;
+
+};
+
+
+class burger_form_4: public ufc::form
+{
+public:
+
+  burger_form_4();
+
+  ~burger_form_4() override;
 
   const char * signature() const final override;
 
@@ -2163,11 +2274,198 @@ public:
   dolfin::MultiMeshCoefficientAssigner u_ex;
 };
 
+class Form_test_FunctionSpace_0: public dolfin::FunctionSpace
+{
+public:
+
+  // Constructor for standard function space
+  Form_test_FunctionSpace_0(std::shared_ptr<const dolfin::Mesh> mesh):
+    dolfin::FunctionSpace(mesh,
+                          std::make_shared<const dolfin::FiniteElement>(std::make_shared<burger_finite_element_0>()),
+                          std::make_shared<const dolfin::DofMap>(std::make_shared<burger_dofmap_0>(), *mesh))
+  {
+    // Do nothing
+  }
+
+  // Constructor for constrained function space
+  Form_test_FunctionSpace_0(std::shared_ptr<const dolfin::Mesh> mesh, std::shared_ptr<const dolfin::SubDomain> constrained_domain):
+    dolfin::FunctionSpace(mesh,
+                          std::make_shared<const dolfin::FiniteElement>(std::make_shared<burger_finite_element_0>()),
+                          std::make_shared<const dolfin::DofMap>(std::make_shared<burger_dofmap_0>(), *mesh, constrained_domain))
+  {
+    // Do nothing
+  }
+
+};
+
+class Form_test_FunctionSpace_1: public dolfin::FunctionSpace
+{
+public:
+
+  // Constructor for standard function space
+  Form_test_FunctionSpace_1(std::shared_ptr<const dolfin::Mesh> mesh):
+    dolfin::FunctionSpace(mesh,
+                          std::make_shared<const dolfin::FiniteElement>(std::make_shared<burger_finite_element_0>()),
+                          std::make_shared<const dolfin::DofMap>(std::make_shared<burger_dofmap_0>(), *mesh))
+  {
+    // Do nothing
+  }
+
+  // Constructor for constrained function space
+  Form_test_FunctionSpace_1(std::shared_ptr<const dolfin::Mesh> mesh, std::shared_ptr<const dolfin::SubDomain> constrained_domain):
+    dolfin::FunctionSpace(mesh,
+                          std::make_shared<const dolfin::FiniteElement>(std::make_shared<burger_finite_element_0>()),
+                          std::make_shared<const dolfin::DofMap>(std::make_shared<burger_dofmap_0>(), *mesh, constrained_domain))
+  {
+    // Do nothing
+  }
+
+};
+
+class Form_test_MultiMeshFunctionSpace_0: public dolfin::MultiMeshFunctionSpace
+{
+public:
+
+  // Constructor for multimesh function space
+  Form_test_MultiMeshFunctionSpace_0(std::shared_ptr<const dolfin::MultiMesh> multimesh): dolfin::MultiMeshFunctionSpace(multimesh)
+  {
+    // Create and add standard function spaces
+    for (std::size_t part = 0; part < multimesh->num_parts(); part++)
+    {
+      std::shared_ptr<const dolfin::FunctionSpace> V(new Form_test_FunctionSpace_0(multimesh->part(part)));
+      add(V);
+    }
+
+    // Build multimesh function space
+    build();
+  }
+
+};
+
+class Form_test_MultiMeshFunctionSpace_1: public dolfin::MultiMeshFunctionSpace
+{
+public:
+
+  // Constructor for multimesh function space
+  Form_test_MultiMeshFunctionSpace_1(std::shared_ptr<const dolfin::MultiMesh> multimesh): dolfin::MultiMeshFunctionSpace(multimesh)
+  {
+    // Create and add standard function spaces
+    for (std::size_t part = 0; part < multimesh->num_parts(); part++)
+    {
+      std::shared_ptr<const dolfin::FunctionSpace> V(new Form_test_FunctionSpace_1(multimesh->part(part)));
+      add(V);
+    }
+
+    // Build multimesh function space
+    build();
+  }
+
+};
+
+class Form_test: public dolfin::Form
+{
+public:
+
+  // Constructor
+  Form_test(std::shared_ptr<const dolfin::FunctionSpace> V1, std::shared_ptr<const dolfin::FunctionSpace> V0):
+    dolfin::Form(2, 0)
+  {
+    _function_spaces[0] = V0;
+    _function_spaces[1] = V1;
+
+    _ufc_form = std::make_shared<const burger_form_4>();
+  }
+
+  // Destructor
+  ~Form_test()
+  {}
+
+  /// Return the number of the coefficient with this name
+  virtual std::size_t coefficient_number(const std::string& name) const
+  {
+
+    dolfin::dolfin_error("generated code for class Form",
+                         "access coefficient data",
+                         "There are no coefficients");
+    return 0;
+  }
+
+  /// Return the name of the coefficient with this number
+  virtual std::string coefficient_name(std::size_t i) const
+  {
+
+    dolfin::dolfin_error("generated code for class Form",
+                         "access coefficient data",
+                         "There are no coefficients");
+    return "unnamed";
+  }
+
+  // Typedefs
+  typedef Form_test_FunctionSpace_0 TestSpace;
+  typedef Form_test_FunctionSpace_1 TrialSpace;
+  typedef Form_test_MultiMeshFunctionSpace_0 MultiMeshTestSpace;
+  typedef Form_test_MultiMeshFunctionSpace_1 MultiMeshTrialSpace;
+
+  // Coefficients
+};
+
+class MultiMeshForm_test: public dolfin::MultiMeshForm
+{
+public:
+
+  // Constructor
+  MultiMeshForm_test(std::shared_ptr<const dolfin::MultiMeshFunctionSpace> V1, std::shared_ptr<const dolfin::MultiMeshFunctionSpace> V0):
+    dolfin::MultiMeshForm(V1, V0)
+  {
+    // Create and add standard forms
+    std::size_t num_parts = V0->num_parts(); // assume all equal and pick first
+    for (std::size_t part = 0; part < num_parts; part++)
+    {
+      std::shared_ptr<dolfin::Form> a(new Form_test(V1->part(part), V0->part(part)));
+    add(a);
+
+    }
+    // Build multimesh form
+    build();
+
+    /// Assign coefficients
+
+  }
+
+  // Destructor
+  ~MultiMeshForm_test()
+  {}
+
+  /// Return the number of the coefficient with this name
+  virtual std::size_t coefficient_number(const std::string& name) const
+  {
+
+    dolfin::dolfin_error("generated code for class Form",
+                         "access coefficient data",
+                         "There are no coefficients");
+    return 0;
+  }
+
+  /// Return the name of the coefficient with this number
+  virtual std::string coefficient_name(std::size_t i) const
+  {
+
+    dolfin::dolfin_error("generated code for class Form",
+                         "access coefficient data",
+                         "There are no coefficients");
+    return "unnamed";
+  }
+
+  // Typedefs
+  typedef Form_test_FunctionSpace_0 TestSpace;
+  typedef Form_test_FunctionSpace_1 TrialSpace;
+  typedef Form_test_MultiMeshFunctionSpace_0 MultiMeshTestSpace;
+  typedef Form_test_MultiMeshFunctionSpace_1 MultiMeshTrialSpace;
+
+  // Coefficients
+};
+
 // Class typedefs
-typedef Form_a BilinearForm;
-typedef MultiMeshForm_a MultiMeshBilinearForm;
-typedef Form_a JacobianForm;
-typedef MultiMeshForm_a MultiMeshJacobianForm;
 typedef Form_L LinearForm;
 typedef MultiMeshForm_L MultiMeshLinearForm;
 typedef Form_L ResidualForm;
