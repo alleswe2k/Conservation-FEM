@@ -76,7 +76,7 @@ Cvel = 0.5
 CRV = 4.0
 
 rv = RV(Cvel, CRV, domain)
-si = SI(1, domain)
+si = SI(1, domain, 0)
 node_patches = si.get_patch_dictionary()
 
 # Create boundary condition
@@ -87,7 +87,7 @@ bc = fem.dirichletbc(PETSc.ScalarType(np.pi/4), fem.locate_dofs_topological(V, f
 bc0 = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
 # Time-dependent output
-xdmf = io.XDMFFile(domain.comm, location_data + '/KPP_RV.xdmf', "w")
+xdmf = io.XDMFFile(domain.comm, location_data + '/KPP_RV32.xdmf', "w",  encoding=io.XDMFFile.Encoding.ASCII)
 xdmf.write_mesh(domain)
 
 # Define solution variable, and interpolate initial solution for visualization in Paraview
@@ -180,7 +180,7 @@ if PLOT:
     plotter.close()
 xdmf.close()
 
-pde.plot_pv_3d(domain, int(1/hmax), u_n, 'Solution uh', 'uh_3d', location=location_fig)
-pde.plot_pv_2d(domain, int(1/hmax), epsilon, 'Espilon', 'epsilon_2d', location=location_fig)
+pde.plot_pv(domain, int(1/hmax), u_n, 'Solution uh', 'uh_3d', location=location_fig)
+pde.plot_pv(domain, int(1/hmax), epsilon, 'Espilon', 'epsilon_2d', location=location_fig)
 RH.x.array[:] = np.abs(RH.x.array)
-pde.plot_pv_2d(domain, int(1/hmax), RH, 'RH', 'Rh_2d', location=location_fig)
+pde.plot_pv(domain, int(1/hmax), RH, 'RH', 'Rh_2d', location=location_fig)

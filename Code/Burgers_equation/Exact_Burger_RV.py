@@ -23,7 +23,7 @@ location_data = os.path.join(script_dir, 'Data/RV') # location = './Data'
 
 pde = PDE_plot()
 PLOT = True
-mesh_size = 100
+mesh_size = 400
 
 domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [mesh_size, mesh_size], cell_type=mesh.CellType.triangle)
 
@@ -109,8 +109,8 @@ Cvel = 0.5
 CRV = 10.0
 
 rv = RV(Cvel, CRV, domain)
-si = SI(1, domain)
-node_patches = SI.get_patch_dictionary()
+si = SI(1, domain, 0)
+node_patches = SI.get_patch_dictionary(si)
 
 u_exact_boundary = fem.Function(V)
 u_exact_boundary.interpolate(exact_solution)
@@ -127,8 +127,8 @@ boundary_dofs = fem.locate_dofs_topological(V, fdim, boundary_facets)
 bc0 = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
 # # Time-dependent output
-# xdmf = io.XDMFFile(domain.comm, location_data, "w")
-# xdmf.write_mesh(domain)
+xdmf = io.XDMFFile(domain.comm, location_data + '/exBurger_400.xdmf', "w", encoding=io.XDMFFile.Encoding.ASCII)
+xdmf.write_mesh(domain)
 
 # Define solution variable, and interpolate initial solution for visualization in Paraview
 uh = fem.Function(V)
@@ -224,7 +224,7 @@ for i in tqdm(range(num_steps)):
     u_n.x.array[:] = uh.x.array
 
     # # Write solution to file
-    # xdmf.write_function(uh, t)
+    xdmf.write_function(uh, t)
     # Update plot
     if PLOT:
         new_warped = grid.warp_by_scalar("uh", factor=1)
@@ -232,14 +232,14 @@ for i in tqdm(range(num_steps)):
         warped.point_data["uh"][:] = uh.x.array
         plotter.write_frame()
 
-pde.plot_pv_3d(domain, mesh_size, u_exact, "exact_solution", "E_exact_solution_3D", location_figures)
-pde.plot_pv_3d(domain, mesh_size, u_initial, "exact_initial", "E_exact_initial_3D", location_figures)
-pde.plot_pv_3d(domain, mesh_size, RH, "Rh", "E_Rh_3D", location_figures)
+# pde.plot_pv(domain, mesh_size, u_exact, "exact_solution", "E_exact_solution_3D", location_figures)
+# pde.plot_pv(domain, mesh_size, u_initial, "exact_initial", "E_exact_initial_3D", location_figures)
+# pde.plot_pv(domain, mesh_size, RH, "Rh", "E_Rh_3D", location_figures)
 
-pde.plot_pv_2d(domain, mesh_size, epsilon, 'Espilon', 'E_epsilon_2D', location_figures)
-pde.plot_pv_2d(domain, mesh_size, RH, 'RH', 'E_Rh_2D', location_figures)
-pde.plot_pv_2d(domain, mesh_size, u_n, 'u_n', 'E_sol_2D', location_figures)
-pde.plot_pv_2d(domain, mesh_size, u_exact, 'u_exact', 'E_u_exact_2D', location_figures)
+# pde.plot_pv(domain, mesh_size, epsilon, 'Espilon', 'E_epsilon_2D', location_figures)
+# pde.plot_pv(domain, mesh_size, RH, 'RH', 'E_Rh_2D', location_figures)
+# pde.plot_pv(domain, mesh_size, u_n, 'u_n', 'E_sol_2D', location_figures)
+# pde.plot_pv(domain, mesh_size, u_exact, 'u_exact', 'E_u_exact_2D', location_figures)
 # for Rh in RH.x.array:
 #     print(Rh)
 
@@ -247,4 +247,4 @@ print(f'Error: {np.abs(u_exact.x.array - uh.x.array)}')
 
 if PLOT:
     plotter.close()
-# xdmf.close()
+xdmf.close()
