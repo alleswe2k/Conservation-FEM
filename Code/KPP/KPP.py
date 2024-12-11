@@ -15,8 +15,8 @@ from dolfinx.nls.petsc import NewtonSolver
 import os 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
-location_fig = os.path.join(script_dir, 'Figures/RV') # location = './Figures'
-location_data = os.path.join(script_dir, 'Data') # location = './Figures'
+location_fig = os.path.join(script_dir, 'Figures/GFEM') # location = './Figures'
+location_data = os.path.join(script_dir, 'Data/GFEM') # location = './Figures'
 
 PLOT = True
 gmsh.initialize()
@@ -43,7 +43,7 @@ V = fem.functionspace(domain, ("Lagrange", 1))
 
 def initial_condition(x):
     # return np.where(x[0]**2 + x[1]**2 <= 1,  14 *np.pi / 4, np.pi / 4)
-    return (x[0]**2 + x[1]**2 <= 1) * 14*np.pi/4 + (x[0]**2 + x[1]**2 > 1) * 0
+    return (x[0]**2 + x[1]**2 <= 1) * 14*np.pi/4 + (x[0]**2 + x[1]**2 > 1) * np.pi/4
 def velocity_field(u):
     # Apply nonlinear operators correctly to the scalar function u
     return ufl.as_vector([ufl.cos(u), -ufl.sin(u)])
@@ -64,7 +64,7 @@ num_steps = int(np.ceil(T/dt))
 fdim = domain.topology.dim - 1
 boundary_facets = mesh.locate_entities_boundary(
     domain, fdim, lambda x: np.full(x.shape[1], True, dtype=bool))
-bc = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
+bc = fem.dirichletbc(PETSc.ScalarType(np.pi/4), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
 # Time-dependent output
 # xdmf = io.XDMFFile(domain.comm, "Code/Nonlinear/KPP/Output/KPP.xdmf", "w")
@@ -94,7 +94,7 @@ if PLOT:
     grid = pyvista.UnstructuredGrid(*plot.vtk_mesh(V))
 
     plotter = pyvista.Plotter()
-    plotter.open_gif(location_fig+"/KPP_nostab.gif", fps=10)
+    plotter.open_gif(location_fig+"/KPP_nostab_old.gif", fps=10)
 
     grid.point_data["uh"] = uh.x.array
     warped = grid.warp_by_scalar("uh", factor=1)

@@ -76,7 +76,7 @@ Cvel = 0.5
 CRV = 4.0
 
 rv = RV(Cvel, CRV, domain)
-si = SI(1, domain)
+si = SI(1, domain, 1e-8 )
 node_patches = si.get_patch_dictionary()
 
 # Create boundary condition
