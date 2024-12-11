@@ -21,7 +21,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 location_figures = os.path.join(script_dir, 'Figures/RV') # location = './Figures'
 
 L2_errors = []
-mesh_sizes = np.array([10, 20, 100, 200])
+mesh_sizes = np.array([50, 100, 200])
 pde = PDE_plot()
 
 def velocity_field(u):
@@ -105,9 +105,10 @@ for mesh_size in mesh_sizes:
     num_steps = int(np.ceil(T/dt))
     Cvel = 0.5
     CRV = 10
+    eps = 1e-8
 
     rv = RV(Cvel, CRV, domain)
-    si = SI(1, domain)
+    si = SI(1, domain, eps)
     node_patches = si.get_patch_dictionary()
 
     u_exact_boundary = fem.Function(V)

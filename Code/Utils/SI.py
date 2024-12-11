@@ -31,6 +31,7 @@ class SI:
         s = 20.0
         x0 = 0.5
         return 1.0 / (1.0 + np.exp(-s*(alpha - x0)))
+        # ReLU
         # alpha0 = 0.5
         # return max(0, (alpha - alpha0) / (1 - alpha0))
 

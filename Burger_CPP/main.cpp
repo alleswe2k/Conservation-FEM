@@ -328,7 +328,7 @@ int main(int argc, char *argv[])
 
   Point point0(xmin, ymin);
   Point point1(xmax, ymax);
-  int N = 100;
+  int N = 200;
 
   for (int i = 0; i < 1; ++i)
     {
@@ -418,52 +418,52 @@ int main(int argc, char *argv[])
       // Time-stepping
       Progress prog("Time-stepping");
       while (t < T - k/2. )
-	{
-	  tic();
+      {
+        tic();
 
-	  *u0->vector() = *u->vector();
-    
-	  // Assemble vector and apply boundary conditions
-	  assemble(*A, a);
-	  assemble(b,  L);
-	  bc.apply(*A, b);
+        *u0->vector() = *u->vector();
+        
+        // Assemble vector and apply boundary conditions
+        assemble(*A, a);
+        assemble(b,  L);
+        bc.apply(*A, b);
 
-	  // Solve the linear system 
-	  ksolver.solve(*A, *u->vector(), b);
+        // Solve the linear system 
+        ksolver.solve(*A, *u->vector(), b);
 
-	  /// make solution a bit smoother
-	  // apply_smoothing(*A, *u);
+        /// make solution a bit smoother
+        // apply_smoothing(*A, *u);
 
-	  /// only for Burger
-	  u_ex->interpolate(*burger_exact);
+        /// only for Burger
+        u_ex->interpolate(*burger_exact);
 
-	  compute_alphaij(*S, *u, *Falpha);
+        compute_alphaij(*S, *u, *Falpha);
 
-	  if (time_save > T/N_sample || time_save > T - DOLFIN_EPS)
-	    {
-	      // Save solution in VTK format
-	      fileu << std::pair<const Function*, double>(u.get(), t);
-	      filea << std::pair<const Function*, double>(Falpha.get(), t);
-	      time_save = 0.0;
-	    }
-    
-	  // Move to next interval
-	  // prog = t/T;
-	  t += k;
-	  time_save += k;
+        if (time_save > T/N_sample || time_save > T - DOLFIN_EPS)
+          {
+            // Save solution in VTK format
+            fileu << std::pair<const Function*, double>(u.get(), t);
+            filea << std::pair<const Function*, double>(Falpha.get(), t);
+            time_save = 0.0;
+          }
+        
+        // Move to next interval
+        // prog = t/T;
+        t += k;
+        time_save += k;
 
-	  *uerr->vector()  = *u->vector();
-	  *uerr->vector() -= *u0->vector();
-	  double const ue_l2 = uerr->vector()->norm("linf");
-	  std::cout << "t = " << t
-		    << ", dt = " << k
-		    << ", l2 = " << ue_l2
-		    << ", iter took " << toc() << " sec"
-		    << std::endl;
-	  if (ue_l2 > 1e3)
-	    error("shit happened");
-    
-	}
+        *uerr->vector()  = *u->vector();
+        *uerr->vector() -= *u0->vector();
+        double const ue_l2 = uerr->vector()->norm("linf");
+        std::cout << "t = " << t
+            << ", dt = " << k
+            << ", l2 = " << ue_l2
+            << ", iter took " << toc() << " sec"
+            << std::endl;
+        if (ue_l2 > 1e3)
+          error("shit happened");
+        
+      }
 
       fileex << std::pair<const Function*, double>(u_ex.get(), t);
       fileu << std::pair<const Function*, double>(u.get(), t);

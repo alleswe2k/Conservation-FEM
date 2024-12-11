@@ -22,7 +22,8 @@ location_data = os.path.join(script_dir, 'Data/SI') # location = './Data'
 pde = PDE_plot()
 PLOT = False
 
-domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [100, 100], cell_type=mesh.CellType.triangle)
+N = 100
+domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [N, N], cell_type=mesh.CellType.triangle)
 
 V = fem.functionspace(domain, ("Lagrange", 1))
 DG0 = fem.functionspace(domain, ("DG", 0))
@@ -97,8 +98,9 @@ T = 0.5 # Final time
 dt = 0.01
 num_steps = int(np.ceil(T/dt))
 Cm = 0.5
+eps = 1e-8
 
-si = SI(Cm, domain, 1e-6)
+si = SI(Cm, domain, eps)
 
 """ Creat patch dictionary """
 node_patches = si.get_patch_dictionary()
@@ -115,8 +117,10 @@ boundary_facets = mesh.locate_entities_boundary(
 boundary_dofs = fem.locate_dofs_topological(V, fdim, boundary_facets)
 
 # Time-dependent output
-xdmf = io.XDMFFile(domain.comm, f"{location_data}/alpha_sigmoid.xdmf", "w")
-xdmf.write_mesh(domain)
+xdmf_alpha = io.XDMFFile(domain.comm, f"{location_data}/alpha_sigmoid.xdmf", "w")
+xdmf_alpha.write_mesh(domain)
+xdmf_epsilon = io.XDMFFile(domain.comm, f"{location_data}/epsilon_sigmoid.xdmf", "w")
+xdmf_epsilon.write_mesh(domain)
 xdmf_sol = io.XDMFFile(domain.comm, f"{location_data}/sol.xdmf", "w")
 xdmf_sol.write_mesh(domain)
 
@@ -150,20 +154,6 @@ if PLOT:
 
 h_CG = get_nodal_h(domain)
 
-# Open a file to write the matrix
-# with open("matrix_python.txt", "w") as file:
-#     # Get the PETSc matrix
-#     mat = A
-#     print(mat.getSize())
-
-#     # Get non-zero entries as triplets (row, col, value)
-#     for row in range(mat.getSize()[0]):  # Loop over all rows
-#         cols, values = mat.getRow(row)  # Get non-zero entries in the row
-#         for col, value in zip(cols, values):
-#             file.write(f"{row} {col} {value}\n")
-
-# print("Matrix saved to matrix_python.txt")
-
 for i in tqdm(range(num_steps)):
     t += dt
     # Create a function to interpolate the exact solution
@@ -172,21 +162,11 @@ for i in tqdm(range(num_steps)):
 
     # Apply the interpolated exact solution on the boundary
     bc = fem.dirichletbc(u_exact_boundary, boundary_dofs)
-    # a = u * v * ufl.dx # dt = 0, just mass matrix
-    # A = assemble_matrix(fem.form(a), bcs=[bc])
-    # A.assemble()
 
     """ Assemble stiffness matrix, obtain element values """
     a = ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
     A = assemble_matrix(fem.form(a), bcs=[bc])
     A.assemble()
-
-    # A_numpy = A.getValuesCSR()[::-1]  # Get CSR values (row indices, col indices, and data)
-    # data, rows, cols = A_numpy
-
-    # with open("bij_python.txt", "w") as py_output_file:
-    #     for i, j, val in zip(rows, cols, data):
-    #         py_output_file.write(f"{i} {j} {val}\n")
 
     epsilon = si.get_epsilon_nonlinear(velocity_field, node_patches, h_CG, u_n, A, plot_func)
     
@@ -195,11 +175,6 @@ for i in tqdm(range(num_steps)):
         0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx + 
         0.5*dt*epsilon*ufl.dot(ufl.grad(uh), ufl.grad(v))*ufl.dx +
         0.5*dt*epsilon*ufl.dot(ufl.grad(u_n), ufl.grad(v))*ufl.dx)
-    
-    # a = fem.form(ufl.lhs(F))
-    # a = u * v * ufl.dx + 0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(u))*v*ufl.dx + 0.5*dt*epsilon*ufl.dot(ufl.grad(u), ufl.grad(v))*ufl.dx
-    # A = assemble_matrix(fem.form(a), bcs=[bc])
-    # A.assemble()
     
     problem = NonlinearProblem(F, uh, bcs = [bc])
     solver = NewtonSolver(MPI.COMM_WORLD, problem)
@@ -217,7 +192,8 @@ for i in tqdm(range(num_steps)):
     u_n.x.array[:] = uh.x.array
 
     # Write solution to file
-    xdmf.write_function(plot_func, t)
+    xdmf_alpha.write_function(plot_func, t)
+    xdmf_epsilon.write_function(epsilon, t)
     xdmf_sol.write_function(u_n, t)
 
     # Update plot
@@ -227,15 +203,17 @@ for i in tqdm(range(num_steps)):
         warped.point_data["uh"][:] = uh.x.array
         plotter.write_frame()
 
-xdmf.close()
+xdmf_alpha.close()
+xdmf_epsilon.close()
 xdmf_sol.close()
 
+print(t)
+u_exact.interpolate(lambda x: exact_solution(x, t))
 # pde.plot_pv_2d(domain, 100, epsilon, 'Epsilon Burger', 'SI_epsilon_2d_burger', location=location_figures)
 
 # pde.plot_pv_2d(domain, 100, u_exact, "Exact solution", "SI_exact_solution", location=location_figures)
 # pde.plot_pv_2d(domain, 100, u_n, "Approximate solution", "SI_approx_solution", location=location_figures)
 
-u_exact.interpolate(initial_condition)
 # pde.plot_pv_3d(domain, 100, u_exact, "Initial exact", "initial_exact", location=location_figures)
 
 
