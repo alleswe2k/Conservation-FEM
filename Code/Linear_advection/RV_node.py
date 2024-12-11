@@ -2,6 +2,7 @@ import matplotlib as mpl
 import pyvista
 import ufl
 import numpy as np
+from tqdm import tqdm
 
 from petsc4py import PETSc
 from mpi4py import MPI
@@ -84,10 +85,11 @@ dt = CFL*hmax/w_inf_norm
 num_steps = int(np.ceil(T/dt))
 Cvel = 0.25
 CRV = 4.0
+eps = 1e-8
 
 rv = RV(Cvel, CRV, domain)
 
-si = SI(1, domain)
+si = SI(1, domain, eps)
 rv = RV(Cvel, CRV, domain)
 node_patches = si.get_patch_dictionary()
 
@@ -195,14 +197,14 @@ if PLOT:
     plotter_epsilon.view_xy()
 
 # """ Then time loop """
-for i in range(num_steps-1):
+for i in tqdm(range(num_steps-1)):
     t += dt
 
     a_R = u * v * ufl.dx
     L_R = 1/dt * u_n * v * ufl.dx - 1/dt * u_old * v * ufl.dx + ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx
 
     # Solve linear system
-    problem = LinearProblem(a_R, L_R, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+    problem = LinearProblem(a_R, L_R, bcs=[bc], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
     Rh = problem.solve() # returns dolfinx.fem.Function
     #Rh.x.array[:] = Rh.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
 
@@ -260,5 +262,6 @@ if PLOT:
     plotter.close()
 xdmf.close()
 
-pde.plot_pv_2d(domain, mesh_size, uh, f'Solution at t = {T} with RV', 'lin_adv_rv', location_figures)
-pde.plot_pv_3d(domain, mesh_size, uh, f'Solution at t = {T} with RV', 'lin_adv_rv_3d', location_figures)
+pde.plot_pv(domain, mesh_size, uh, f'Solution at t = {T} with RV', 'lin_adv_rv', location_figures, plot_2d=True)
+pde.plot_pv(domain, mesh_size, uh, f'Solution at t = {T} with RV', 'lin_adv_rv_3d', location_figures)
+pde.plot_pv(domain, mesh_size, epsilon, 'Epsilon', 'discont_epsilon_2d_RV', location_figures, plot_2d=True)

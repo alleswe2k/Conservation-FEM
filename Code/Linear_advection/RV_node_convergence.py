@@ -88,8 +88,9 @@ for hmax in hmaxes:
     num_steps = int(np.ceil(T/dt))
     Cvel = 0.25
     CRV = 1.0
+    eps = 1e-8
 
-    si = SI(1, domain)
+    si = SI(1, domain, eps)
     rv = RV(Cvel, CRV, domain)
     node_patches = si.get_patch_dictionary()
 

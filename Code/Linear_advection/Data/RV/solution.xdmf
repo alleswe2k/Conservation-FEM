@@ -704,8 +704,6 @@
           <DataItem Dimensions="3899 1" Format="HDF">solution.h5:/Function/uh/0_17408986373915136</DataItem>
         </Attribute>
       </Grid>
-<<<<<<< HEAD
-=======
       <Grid Name="uh" GridType="Uniform">
         <xi:include xpointer="xpointer(/Xdmf/Domain/Grid[@GridType='Uniform'][1]/*[self::Topology or self::Geometry])" />
         <Time Value="0.17584834721126399" />
@@ -3996,7 +3994,6 @@
           <DataItem Dimensions="3899 1" Format="HDF">solution.h5:/Function/uh/1_0005770956320845</DataItem>
         </Attribute>
       </Grid>
->>>>>>> main
     </Grid>
   </Domain>
 </Xdmf>

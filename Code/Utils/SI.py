@@ -29,8 +29,10 @@ class SI:
 
     def sigmoid_activation(self, alpha):
         s = 20.0
-        x0 = 0.9
+        x0 = 0.5
         return 1.0 / (1.0 + np.exp(-s*(alpha - x0)))
+        # alpha0 = 0.5
+        # return max(0, (alpha - alpha0) / (1 - alpha0))
 
     def get_epsilon_nonlinear(self, velocity_field, node_patches, h_CG, u_n, stiffness_matrix, plot_func):
         V = fem.functionspace(self.domain, ("Lagrange", 1))
@@ -63,7 +65,7 @@ class SI:
         
         return epsilon
 
-    def get_epsilon_linear(self, w, node_patches, h_CG, u_n, stiffness_matrix):
+    def get_epsilon_linear(self, w, node_patches, h_CG, u_n, stiffness_matrix, plot_func):
         V = fem.functionspace(self.domain, ("Lagrange", 1))
         epsilon = fem.Function(V)
         for node, adjacent_nodes in node_patches.items():
@@ -85,8 +87,9 @@ class SI:
             numerator = np.abs(numerator)
             denominator = max(denominator, self.eps)
             alpha = numerator / denominator
-            # alpha = self.sigmoid_activation(alpha)
-            epsilon.x.array[node] = alpha * self.Cm * hi * fi_norm
+            alpha_psi = self.sigmoid_activation(alpha)
+            plot_func.x.array[node] = alpha_psi
+            epsilon.x.array[node] = alpha_psi * self.Cm * hi * fi_norm
         
         return epsilon
     

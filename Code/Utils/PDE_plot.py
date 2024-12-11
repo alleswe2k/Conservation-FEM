@@ -28,13 +28,14 @@ class PDE_plot():
         scalar_field = grid[title]
         scalar_range = scalar_field.max() - scalar_field.min()
 
-        if scalar_range > 0:
-            scale_factor = desired_max_height / scalar_range
-        else:
-            scale_factor = 1.0
+        # if scalar_range > 0:
+        #     scale_factor = desired_max_height / scalar_range
+        # else:
+        #     scale_factor = 1.0
 
         # Apply the warping with the calculated scale factor
-        warped = grid.warp_by_scalar(title, factor=scale_factor)
+        # warped = grid.warp_by_scalar(title, factor=scale_factor)
+        warped = grid.warp_by_scalar(title)
 
         color_map = mpl.colormaps.get_cmap("viridis").resampled(25)
 
@@ -85,7 +86,7 @@ class PDE_plot():
         box.get_children().append(txt)
         box.set_figure(box.figure)
 
-        plt.xlabel("Mesh size", fontsize=14)
+        plt.xlabel(r"$1/h$", fontsize=14)
         plt.ylabel(r"$||e||$", fontsize=14)
         plt.title(f'Convergence for {title}', fontsize=18)
         plt.tight_layout()
