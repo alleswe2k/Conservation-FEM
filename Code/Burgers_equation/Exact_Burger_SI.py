@@ -10,7 +10,7 @@ from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_matrix, NonlinearProblem, LinearProblem
 from dolfinx.nls.petsc import NewtonSolver
 
-from Utils.helpers import get_nodal_h
+from Utils.helpers import get_nodal_h, smooth_vector
 from Utils.SI import SI
 from Utils.PDE_plot import PDE_plot
 
@@ -22,7 +22,7 @@ location_data = os.path.join(script_dir, 'Data/SI') # location = './Data'
 pde = PDE_plot()
 PLOT = False
 
-N = 200
+N = 100
 domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [N, N], cell_type=mesh.CellType.triangle)
 
 V = fem.functionspace(domain, ("Lagrange", 1))
@@ -94,7 +94,7 @@ plot_func.name = "plot_func"
 
 h_CG = get_nodal_h(domain)
 
-CFL = 0.2
+CFL = 0.5
 t = 0  # Start time
 T = 0.5 # Final time
 dt = CFL * min(h_CG.x.array)
@@ -121,11 +121,11 @@ boundary_facets = mesh.locate_entities_boundary(
 boundary_dofs = fem.locate_dofs_topological(V, fdim, boundary_facets)
 
 # Time-dependent output
-xdmf_alpha = io.XDMFFile(domain.comm, f"{location_data}/alpha_sigmoid_N{N}.xdmf", "w")
+xdmf_alpha = io.XDMFFile(domain.comm, f"{location_data}/alpha_smooth_N{N}.xdmf", "w")
 xdmf_alpha.write_mesh(domain)
-xdmf_epsilon = io.XDMFFile(domain.comm, f"{location_data}/epsilon_sigmoid_N{N}.xdmf", "w")
+xdmf_epsilon = io.XDMFFile(domain.comm, f"{location_data}/epsilon_smooth_N{N}.xdmf", "w")
 xdmf_epsilon.write_mesh(domain)
-xdmf_sol = io.XDMFFile(domain.comm, f"{location_data}/sol_N{N}.xdmf", "w")
+xdmf_sol = io.XDMFFile(domain.comm, f"{location_data}/sol_smooth_N{N}.xdmf", "w")
 xdmf_sol.write_mesh(domain)
 
 # Define solution variable, and interpolate initial solution for visualization in Paraview
@@ -189,6 +189,8 @@ for i in tqdm(range(num_steps)):
     n, converged = solver.solve(uh)
     assert (converged)
     uh.x.scatter_forward()
+
+    smooth_vector(domain, uh, node_patches)
 
     # Update solution at previous time step (u_n)
     u_old.x.array[:] = u_n.x.array

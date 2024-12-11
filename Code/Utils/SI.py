@@ -65,7 +65,7 @@ class SI:
             epsilon.x.array[node] = psi_alpha * self.Cm * hi * fi_norm
         
         return epsilon
-
+        
     def get_epsilon_linear(self, w, node_patches, h_CG, u_n, stiffness_matrix, plot_func):
         V = fem.functionspace(self.domain, ("Lagrange", 1))
         epsilon = fem.Function(V)
@@ -190,3 +190,46 @@ class SI:
     #         epsilon_array[node] = alpha * self.Cm * hi * fi_norm
 
     #     return epsilon
+
+    # def get_alpha_nonlinear(self, velocity_field, node_patches, h_CG, u_n, stiffness_matrix, plot_func):
+    #     # Create a function to store epsilon
+    #     V = fem.functionspace(self.domain, ("Lagrange", 1))
+    #     alphas = fem.Function(V)
+    #     alphas_array = alphas.x.petsc_vec  # Direct array access for efficiency
+
+    #     # Access stiffness matrix as PETSc Mat
+    #     mat = stiffness_matrix
+    #     start, end = mat.getOwnershipRange()
+
+    #     # Extract array data
+    #     u_values = u_n.x.array
+
+    #     # Loop through rows corresponding to local nodes
+    #     for row in range(start, end):
+    #         cols, bij = mat.getRow(row)  # Retrieve non-zero entries
+    #         node = row
+
+    #         numerator = 0.0
+    #         denominator = 0.0
+
+    #         nonzero_mask = bij != 0
+    #         cols = cols[nonzero_mask]
+    #         bij = bij[nonzero_mask]
+
+    #         for idx, adj_node in enumerate(cols):
+    #             if node != adj_node:  # Ignore diagonal entries
+    #                 delta_u = u_values[adj_node] - u_values[node]
+    #                 beta = bij[idx]
+
+    #                 numerator += beta * delta_u
+    #                 denominator += abs(beta) * abs(delta_u)
+
+    #         numerator = abs(numerator)
+    #         denominator = max(denominator, self.eps)
+    #         alpha = numerator / denominator
+    #         alpha_psi = self.sigmoid_activation(alpha)
+    #         plot_func.x.array[node] = alpha_psi
+
+    #         # Store computed epsilon
+    #         alphas_array[node] = alpha_psi
+    #     return alphas

@@ -93,10 +93,12 @@ for mesh_size in mesh_sizes:
     u_old.name = "u_old"
     u_old.interpolate(initial_condition)
 
-    CFL = 0.2
+    h_CG = get_nodal_h(domain)
+
+    CFL = 0.5 # 0.2 in benchmark paper
     t = 0  # Start time
     T = 0.5 # Final time
-    dt = 0.01
+    dt = CFL * min(h_CG.x.array)
     num_steps = int(np.ceil(T/dt))
     Cm = 0.5
     eps = 1e-8
@@ -130,7 +132,6 @@ for mesh_size in mesh_sizes:
     u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
 
 
-    h_CG = get_nodal_h(domain)
     plot_func = fem.Function(V)
     for i in tqdm(range(num_steps)):
         t += dt

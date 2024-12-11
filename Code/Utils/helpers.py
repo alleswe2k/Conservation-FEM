@@ -36,3 +36,17 @@ def get_nodal_h(domain):
     h_CG = lin_problem.solve() # returns dolfinx.fem.Function
 
     return h_CG
+
+def smooth_vector(domain, u, patches):
+    l = 4    
+
+    for node, adjacent_nodes in patches.items():
+        # node = i and adjacent_nodes (including self) = j
+        # print("Node:", node, " - Adjacent nodes:", adjacent_nodes)
+        sum = 0
+        for adj_node in adjacent_nodes:
+            if node != adj_node:
+                sum += u.x.array[adj_node]
+
+        d = len(adjacent_nodes) - 1
+        u.x.array[node] = (sum + (l-1)*d*u.x.array[node]) / (l*d)

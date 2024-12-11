@@ -97,11 +97,12 @@ for mesh_size in mesh_sizes:
     u_old.name = "u_old"
     u_old.interpolate(initial_condition)
 
+    h_CG = get_nodal_h(domain)
 
-    CFL = 0.2
+    CFL = 0.5 # 0.2 in benchmark paper
     t = 0  # Start time
     T = 0.5 # Final time
-    dt = 0.01
+    dt = CFL * min(h_CG.x.array)
     num_steps = int(np.ceil(T/dt))
     Cvel = 0.5
     CRV = 10
