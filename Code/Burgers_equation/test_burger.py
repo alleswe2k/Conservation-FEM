@@ -7,9 +7,8 @@ from tqdm import tqdm
 from mpi4py import MPI
 
 from dolfinx import fem, mesh, io, plot
-from dolfinx.fem.petsc import assemble_matrix, NonlinearProblem, LinearProblem, assemble_vector, create_vector, apply_lifting, set_bc
+from dolfinx.fem.petsc import assemble_matrix, NonlinearProblem, LinearProblem
 from dolfinx.nls.petsc import NewtonSolver
-from petsc4py import PETSc
 
 from Utils.helpers import get_nodal_h
 from Utils.SI import SI
@@ -28,9 +27,6 @@ domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1
 
 V = fem.functionspace(domain, ("Lagrange", 1))
 DG0 = fem.functionspace(domain, ("DG", 0))
-
-def flux(w, w0):
-    return ufl.as_vector([0.5*w0*w, 0.5*w0*w])
 
 def velocity_field(u):
     # Apply nonlinear operators correctly to the scalar function u
@@ -102,7 +98,7 @@ T = 0.5 # Final time
 dt = 0.01
 num_steps = int(np.ceil(T/dt))
 Cm = 0.5
-eps = 1e-8
+eps = 1e-6
 
 si = SI(Cm, domain, eps)
 
@@ -121,11 +117,11 @@ boundary_facets = mesh.locate_entities_boundary(
 boundary_dofs = fem.locate_dofs_topological(V, fdim, boundary_facets)
 
 # Time-dependent output
-xdmf_alpha = io.XDMFFile(domain.comm, f"{location_data}/test_alpha_sigmoid_N{N}.xdmf", "w")
+xdmf_alpha = io.XDMFFile(domain.comm, f"{location_data}/alpha_sigmoid_N{N}.xdmf", "w")
 xdmf_alpha.write_mesh(domain)
-xdmf_epsilon = io.XDMFFile(domain.comm, f"{location_data}/test_epsilon_sigmoid_N{N}.xdmf", "w")
+xdmf_epsilon = io.XDMFFile(domain.comm, f"{location_data}/epsilon_sigmoid_N{N}.xdmf", "w")
 xdmf_epsilon.write_mesh(domain)
-xdmf_sol = io.XDMFFile(domain.comm, f"{location_data}/test_sol_N{N}.xdmf", "w")
+xdmf_sol = io.XDMFFile(domain.comm, f"{location_data}/sol_N{N}.xdmf", "w")
 xdmf_sol.write_mesh(domain)
 
 # Define solution variable, and interpolate initial solution for visualization in Paraview
@@ -158,7 +154,7 @@ if PLOT:
 
 h_CG = get_nodal_h(domain)
 
-xdmf_sol.write_function(u_n, t)
+xdmf_sol.write_function(uh, t)
 
 for i in tqdm(range(num_steps)):
     t += dt
@@ -176,44 +172,31 @@ for i in tqdm(range(num_steps)):
 
     epsilon = si.get_epsilon_nonlinear(velocity_field, node_patches, h_CG, u_n, A, plot_func)
     
-    a = u * v * ufl.dx + 0.5*dt*ufl.div(flux(u, uh))*v*ufl.dx + 0.5*dt*epsilon*ufl.inner(ufl.grad(u), ufl.grad(v))*ufl.dx
-    L = uh * v * ufl.dx - 0.5*dt*ufl.div(flux(uh, uh))*v*ufl.dx - 0.5*dt*epsilon*ufl.inner(ufl.grad(uh), ufl.grad(v))*ufl.dx
-
-    # Preparing linear algebra structures for time dep. problems
-    bilinear_form = fem.form(a)
-    linear_form = fem.form(L)
-
-    # A does not change through time, but b does
-    A = assemble_matrix(bilinear_form, bcs=[bc])
-    A.assemble()
-    b = create_vector(linear_form)
-
-    solver = PETSc.KSP().create(domain.comm)
-    solver.setOperators(A)
-    solver.setType(PETSc.KSP.Type.PREONLY)
-    solver.getPC().setType(PETSc.PC.Type.LU)
-    """ Rest """
-    # Update the right hand side reusing the initial vector
-    with b.localForm() as loc_b:
-        loc_b.set(0)
-    assemble_vector(b, linear_form)
-
-    # Apply Dirichlet boundary condition to the vector
-    apply_lifting(b, [bilinear_form], [[bc]])
-    b.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
-    set_bc(b, [bc])
+    F = (uh*v *ufl.dx - u_old*v *ufl.dx + 
+        0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
+        0.5*dt*ufl.dot(velocity_field(u_old), ufl.grad(u_old))*v*ufl.dx + 
+        0.5*dt*epsilon*ufl.dot(ufl.grad(uh), ufl.grad(v))*ufl.dx +
+        0.5*dt*epsilon*ufl.dot(ufl.grad(u_old), ufl.grad(v))*ufl.dx)
     
-    # Solve linear problem
-    solver.solve(b, uh.x.petsc_vec)
+    problem = NonlinearProblem(F, uh, bcs = [bc])
+    solver = NewtonSolver(MPI.COMM_WORLD, problem)
+    solver.convergence_criterion = "incremental"
+    solver.rtol = 1e-6
+    solver.report = True
+
+    # Solve nonlinear problem
+    n, converged = solver.solve(uh)
+    assert (converged)
     uh.x.scatter_forward()
 
     # Update solution at previous time step (u_n)
+    u_old.x.array[:] = u_n.x.array
     u_n.x.array[:] = uh.x.array
 
     # Write solution to file
     xdmf_alpha.write_function(plot_func, t)
     xdmf_epsilon.write_function(epsilon, t)
-    xdmf_sol.write_function(u_n, t)
+    xdmf_sol.write_function(uh, t)
 
     # Update plot
     if PLOT:

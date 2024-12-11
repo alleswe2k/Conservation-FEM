@@ -92,13 +92,17 @@ u_old.interpolate(initial_condition)
 plot_func = fem.Function(V)
 plot_func.name = "plot_func"
 
+h_CG = get_nodal_h(domain)
+
 CFL = 0.2
 t = 0  # Start time
 T = 0.5 # Final time
-dt = 0.01
+dt = CFL * min(h_CG.x.array)
 num_steps = int(np.ceil(T/dt))
 Cm = 0.5
-eps = 1e-6
+eps = 1e-8
+
+print(dt)
 
 si = SI(Cm, domain, eps)
 
@@ -150,9 +154,6 @@ if PLOT:
     renderer = plotter.add_mesh(warped, show_edges=True, lighting=False,
                                 cmap=viridis, scalar_bar_args=sargs,
                                 clim=[0, max(uh.x.array)])
-    
-
-h_CG = get_nodal_h(domain)
 
 xdmf_sol.write_function(u_n, t)
 
