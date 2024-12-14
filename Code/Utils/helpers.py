@@ -4,9 +4,9 @@ import numpy as np
 from dolfinx import fem
 from dolfinx.fem.petsc import LinearProblem
 
-def get_nodal_h(domain):
+def get_nodal_h(domain, degree=1):
     DG0 = fem.functionspace(domain, ("DG", 0))
-    V = fem.functionspace(domain, ("Lagrange", 1))
+    V = fem.functionspace(domain, ("Lagrange", degree))
     h_DG = fem.Function(DG0)  # Cell-based function for hk values
 
     cell_to_vertex_map = domain.topology.connectivity(domain.topology.dim, 0)
@@ -37,9 +37,7 @@ def get_nodal_h(domain):
 
     return h_CG
 
-def smooth_vector(domain, u, patches):
-    l = 4    
-
+def smooth_vector(u, patches, l):
     for node, adjacent_nodes in patches.items():
         # node = i and adjacent_nodes (including self) = j
         # print("Node:", node, " - Adjacent nodes:", adjacent_nodes)

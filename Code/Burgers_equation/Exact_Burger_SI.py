@@ -22,7 +22,7 @@ location_data = os.path.join(script_dir, 'Data/SI') # location = './Data'
 pde = PDE_plot()
 PLOT = False
 
-N = 100
+N = 200
 domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [N, N], cell_type=mesh.CellType.triangle)
 
 V = fem.functionspace(domain, ("Lagrange", 1))
@@ -121,11 +121,11 @@ boundary_facets = mesh.locate_entities_boundary(
 boundary_dofs = fem.locate_dofs_topological(V, fdim, boundary_facets)
 
 # Time-dependent output
-xdmf_alpha = io.XDMFFile(domain.comm, f"{location_data}/alpha_smooth_N{N}.xdmf", "w")
+xdmf_alpha = io.XDMFFile(domain.comm, f"{location_data}/alpha_sigmoid_N{N}.xdmf", "w")
 xdmf_alpha.write_mesh(domain)
-xdmf_epsilon = io.XDMFFile(domain.comm, f"{location_data}/epsilon_smooth_N{N}.xdmf", "w")
+xdmf_epsilon = io.XDMFFile(domain.comm, f"{location_data}/epsilon_sigmoid_N{N}.xdmf", "w")
 xdmf_epsilon.write_mesh(domain)
-xdmf_sol = io.XDMFFile(domain.comm, f"{location_data}/sol_smooth_N{N}.xdmf", "w")
+xdmf_sol = io.XDMFFile(domain.comm, f"{location_data}/sol_N{N}.xdmf", "w")
 xdmf_sol.write_mesh(domain)
 
 # Define solution variable, and interpolate initial solution for visualization in Paraview
@@ -190,7 +190,7 @@ for i in tqdm(range(num_steps)):
     assert (converged)
     uh.x.scatter_forward()
 
-    smooth_vector(domain, uh, node_patches)
+    smooth_vector(uh, node_patches, l=4)
 
     # Update solution at previous time step (u_n)
     u_old.x.array[:] = u_n.x.array

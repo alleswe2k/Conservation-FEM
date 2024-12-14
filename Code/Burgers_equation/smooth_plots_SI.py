@@ -10,17 +10,23 @@ from dolfinx import fem, mesh, io, plot
 from dolfinx.fem.petsc import assemble_matrix, NonlinearProblem, LinearProblem
 from dolfinx.nls.petsc import NewtonSolver
 
-from Utils.helpers import get_nodal_h
+from Utils.helpers import get_nodal_h, smooth_vector
 from Utils.SI import SI
 from Utils.PDE_plot import PDE_plot
 
 import os
 script_dir = os.path.dirname(os.path.abspath(__file__))
 location_figures = os.path.join(script_dir, 'Figures/SI') # location = './Figures'
+location_data = os.path.join(script_dir, 'Data/SI') # location = './Data'
 
-L2_errors = []
-mesh_sizes = np.array([50, 100, 200])
 pde = PDE_plot()
+PLOT = False
+
+N = 100
+domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [N, N], cell_type=mesh.CellType.triangle)
+
+V = fem.functionspace(domain, ("Lagrange", 1))
+DG0 = fem.functionspace(domain, ("DG", 0))
 
 def velocity_field(u):
     # Apply nonlinear operators correctly to the scalar function u
@@ -70,18 +76,10 @@ def initial_condition(x):
     u = np.where((x0 > 0.5) & (x1 < 0.5), 0.8, u)
     return u
 
+l_values = [10, 6, 4, 2]
 
-for mesh_size in mesh_sizes:
-        
-    domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [mesh_size, mesh_size], cell_type=mesh.CellType.triangle)
-
-    V = fem.functionspace(domain, ("Lagrange", 1))
-    W = fem.functionspace(domain, ("Lagrange", 3))
-    DG0 = fem.functionspace(domain, ("DG", 0))
-
-
-
-    u_exact = fem.Function(W)
+for l in l_values:
+    u_exact = fem.Function(V)
     u_exact.name = "U Exact"
     u_exact.interpolate(exact_solution)
 
@@ -93,15 +91,20 @@ for mesh_size in mesh_sizes:
     u_old.name = "u_old"
     u_old.interpolate(initial_condition)
 
+    plot_func = fem.Function(V)
+    plot_func.name = "plot_func"
+
     h_CG = get_nodal_h(domain)
 
-    CFL = 0.5 # 0.2 in benchmark paper
+    CFL = 0.5
     t = 0  # Start time
     T = 0.5 # Final time
     dt = CFL * min(h_CG.x.array)
     num_steps = int(np.ceil(T/dt))
     Cm = 0.5
     eps = 1e-8
+
+    print("dt:", dt)
 
     si = SI(Cm, domain, eps)
 
@@ -119,10 +122,6 @@ for mesh_size in mesh_sizes:
     # Locate boundary degrees of freedom
     boundary_dofs = fem.locate_dofs_topological(V, fdim, boundary_facets)
 
-    # Time-dependent output
-    # xdmf = io.XDMFFile(domain.comm,location_data, "w")
-    # xdmf.write_mesh(domain)
-
     # Define solution variable, and interpolate initial solution for visualization in Paraview
     uh = fem.Function(V)
     uh.name = "uh"
@@ -131,9 +130,13 @@ for mesh_size in mesh_sizes:
     # Variational problem and solver
     u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
 
+    # Time-dependent output
+    xdmf_sol = io.XDMFFile(domain.comm, f"{location_data}/sol_smooth_N{N}_l{l}.xdmf", "w")
+    xdmf_sol.write_mesh(domain)
 
-    plot_func = fem.Function(V)
-    for i in tqdm(range(num_steps-1)):
+    xdmf_sol.write_function(u_n, t)
+
+    for i in tqdm(range(num_steps)):
         t += dt
         # Create a function to interpolate the exact solution
         u_exact_boundary = fem.Function(V)
@@ -166,22 +169,25 @@ for mesh_size in mesh_sizes:
         assert (converged)
         uh.x.scatter_forward()
 
+        smooth_vector(uh, node_patches, l)
+
         # Update solution at previous time step (u_n)
         u_old.x.array[:] = u_n.x.array
         u_n.x.array[:] = uh.x.array
 
+        # Write solution to file
+        xdmf_sol.write_function(u_n, t)
+
+    xdmf_sol.close()
+
     print(t)
-    error_L2 = np.sqrt(domain.comm.allreduce(fem.assemble_scalar(fem.form((uh - u_exact)**2 * ufl.dx)), op=MPI.SUM))
-    if domain.comm.rank == 0:
-        print(f"L2-error: {error_L2:.2e}")
+    u_exact.interpolate(lambda x: exact_solution(x, t))
+    # pde.plot_pv_2d(domain, 100, epsilon, 'Epsilon Burger', 'SI_epsilon_2d_burger', location=location_figures)
 
-    L2_errors.append(float(error_L2))
+    # pde.plot_pv_2d(domain, 100, u_exact, "Exact solution", "SI_exact_solution", location=location_figures)
+    # pde.plot_pv_2d(domain, 100, u_n, "Approximate solution", "SI_approx_solution", location=location_figures)
 
-print(f'L2-errors: {L2_errors}')
+    # pde.plot_pv_3d(domain, 100, u_exact, "Initial exact", "initial_exact", location=location_figures)
 
-new_lst = 1/mesh_sizes
-fitted_error = np.polyfit(np.log10(new_lst), np.log10(L2_errors), 1)
-print(f'convergence: {fitted_error[0]}')
 
-pde.plot_convergence(L2_errors, mesh_sizes, 'Exact Burger SI', 'exact_burger_si_conv', location_figures)
-
+    print(f'Error: {np.abs(u_exact.x.array - uh.x.array)}')

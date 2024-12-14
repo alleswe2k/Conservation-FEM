@@ -4,30 +4,40 @@ import ufl
 import numpy as np
 from tqdm import tqdm
 
+from petsc4py import PETSc
 from mpi4py import MPI
 
 from dolfinx import fem, mesh, io, plot
-from dolfinx.fem.petsc import assemble_matrix, NonlinearProblem, LinearProblem
+from dolfinx.fem.petsc import NonlinearProblem
 from dolfinx.nls.petsc import NewtonSolver
-
-from Utils.helpers import get_nodal_h
-from Utils.SI import SI
 from Utils.PDE_plot import PDE_plot
+
+from Utils.helpers import get_nodal_h, smooth_vector
+from Utils.RV import RV
+from Utils.SI import SI
 
 import os
 script_dir = os.path.dirname(os.path.abspath(__file__))
-location_figures = os.path.join(script_dir, 'Figures/SI') # location = './Figures'
+location_figures = os.path.join(script_dir, 'Figures/GFEM') # location = './Figures'
+location_data = os.path.join(script_dir, 'Data/GFEM') # location = './Data'
 
-L2_errors = []
-mesh_sizes = np.array([50, 100, 200])
 pde = PDE_plot()
+PLOT = True
+mesh_size = 100
+
+domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [mesh_size, mesh_size], cell_type=mesh.CellType.triangle)
+
+V = fem.functionspace(domain, ("Lagrange", 1))
+DG0 = fem.functionspace(domain, ("DG", 0))
+
+si = SI(0.5, domain, 1e-8)
+node_patches = si.get_patch_dictionary()
 
 def velocity_field(u):
     # Apply nonlinear operators correctly to the scalar function u
     return ufl.as_vector([u,u])
 
-def exact_solution(x, t=0.5):
-
+def exact_solution(x, t=0.5): 
     u = np.zeros_like(x[0])  # Initialize the solution array with zeros
     
     # First condition
@@ -58,6 +68,8 @@ def exact_solution(x, t=0.5):
 
     return u
 
+
+
 def initial_condition(x):
     x0, x1 = x[0], x[1]  # Extract x0 and x1 from the input array
 
@@ -70,20 +82,16 @@ def initial_condition(x):
     u = np.where((x0 > 0.5) & (x1 < 0.5), 0.8, u)
     return u
 
+l_values = [10, 6, 4, 2]
 
-for mesh_size in mesh_sizes:
-        
-    domain = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([1, 1])], [mesh_size, mesh_size], cell_type=mesh.CellType.triangle)
-
-    V = fem.functionspace(domain, ("Lagrange", 1))
-    W = fem.functionspace(domain, ("Lagrange", 3))
-    DG0 = fem.functionspace(domain, ("DG", 0))
-
-
-
-    u_exact = fem.Function(W)
+for l in l_values:
+    u_exact = fem.Function(V)
     u_exact.name = "U Exact"
     u_exact.interpolate(exact_solution)
+
+    u_initial = fem.Function(V)
+    u_initial.name = "u_initial"
+    u_initial.interpolate(initial_condition)
 
     u_n = fem.Function(V)
     u_n.name = "u_n"
@@ -93,47 +101,51 @@ for mesh_size in mesh_sizes:
     u_old.name = "u_old"
     u_old.interpolate(initial_condition)
 
-    h_CG = get_nodal_h(domain)
+    u_old_old = fem.Function(V)
+    u_old_old.name = "u_old_old"
+    u_old_old.interpolate(initial_condition)
 
-    CFL = 0.5 # 0.2 in benchmark paper
+    CFL = 0.2
     t = 0  # Start time
     T = 0.5 # Final time
-    dt = CFL * min(h_CG.x.array)
+    dt = 0.01
     num_steps = int(np.ceil(T/dt))
-    Cm = 0.5
-    eps = 1e-8
+    Cvel = 0.5
+    CRV = 10.0
 
-    si = SI(Cm, domain, eps)
-
-    """ Creat patch dictionary """
-    node_patches = si.get_patch_dictionary()
+    u_exact_boundary = fem.Function(V)
+    u_exact_boundary.interpolate(exact_solution)
 
 
     # # Create boundary condition
     fdim = domain.topology.dim - 1
     boundary_facets = mesh.locate_entities_boundary(
         domain, fdim, lambda x: np.full(x.shape[1], True, dtype=bool))
-    # # bc = fem.dirichletbc(PETSc.ScalarType(np.pi/4), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
-    # bc = fem.dirichletbc(u_exact_boundary, fem.locate_dofs_topological(V, fdim, boundary_facets), V)
 
     # Locate boundary degrees of freedom
     boundary_dofs = fem.locate_dofs_topological(V, fdim, boundary_facets)
 
-    # Time-dependent output
-    # xdmf = io.XDMFFile(domain.comm,location_data, "w")
-    # xdmf.write_mesh(domain)
+    bc0 = fem.dirichletbc(PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V)
+
+    # # Time-dependent output
+    xdmf_sol = io.XDMFFile(domain.comm, f"{location_data}/sol_GFEM_l{l}.xdmf", "w")
+    xdmf_sol.write_mesh(domain)
 
     # Define solution variable, and interpolate initial solution for visualization in Paraview
     uh = fem.Function(V)
     uh.name = "uh"
     uh.interpolate(initial_condition)
 
-    # Variational problem and solver
+    RH = fem.Function(V)
+    RH.name = "RH"
+    RH.interpolate(lambda x: np.full(x.shape[1], 0, dtype = np.float64))
+        
+
+    h_CG = get_nodal_h(domain)
+
     u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
 
-
-    plot_func = fem.Function(V)
-    for i in tqdm(range(num_steps-1)):
+    for i in tqdm(range(num_steps)):
         t += dt
         # Create a function to interpolate the exact solution
         u_exact_boundary = fem.Function(V)
@@ -142,23 +154,14 @@ for mesh_size in mesh_sizes:
         # Apply the interpolated exact solution on the boundary
         bc = fem.dirichletbc(u_exact_boundary, boundary_dofs)
 
-        """ Assemble stiffness matrix, obtain element values """
-        a = ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
-        A = assemble_matrix(fem.form(a), bcs=[bc])
-        A.assemble()
-
-        epsilon = si.get_epsilon_nonlinear(velocity_field, node_patches, h_CG, u_n, A, plot_func)
-        
         F = (uh*v *ufl.dx - u_n*v *ufl.dx + 
             0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
-            0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx + 
-            0.5*dt*epsilon*ufl.dot(ufl.grad(uh), ufl.grad(v))*ufl.dx +
-            0.5*dt*epsilon*ufl.dot(ufl.grad(u_n), ufl.grad(v))*ufl.dx)
+            0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
         
-        problem = NonlinearProblem(F, uh, bcs = [bc])
+        problem = NonlinearProblem(F, uh, bcs=[bc])
         solver = NewtonSolver(MPI.COMM_WORLD, problem)
-        solver.max_it = 100  # Increase maximum number of iterations
-        solver.rtol =  1e-4
+        solver.max_it = 500  # Increase maximum number of iterations
+        solver.rtol =  1e-1
         solver.report = True
 
         # Solve nonlinear problem
@@ -166,22 +169,21 @@ for mesh_size in mesh_sizes:
         assert (converged)
         uh.x.scatter_forward()
 
+        smooth_vector(uh, node_patches, l)
+
         # Update solution at previous time step (u_n)
+        u_old_old.x.array[:] = u_old.x.array
         u_old.x.array[:] = u_n.x.array
         u_n.x.array[:] = uh.x.array
 
-    print(t)
-    error_L2 = np.sqrt(domain.comm.allreduce(fem.assemble_scalar(fem.form((uh - u_exact)**2 * ufl.dx)), op=MPI.SUM))
-    if domain.comm.rank == 0:
-        print(f"L2-error: {error_L2:.2e}")
+        # Write solution to file
+        xdmf_sol.write_function(uh, t)
 
-    L2_errors.append(float(error_L2))
+    #pde.plot_pv_3d(domain, mesh_size, u_exact, "exact_solution", "E_exact_solution_3D", location_figures)
+    #pde.plot_pv_3d(domain, mesh_size, u_initial, "exact_initial", "E_exact_initial_3D", location_figures)
 
-print(f'L2-errors: {L2_errors}')
+    pde.plot_pv(domain, mesh_size, uh, 'u_n', 'GFEM_sol_2D', location_figures)
 
-new_lst = 1/mesh_sizes
-fitted_error = np.polyfit(np.log10(new_lst), np.log10(L2_errors), 1)
-print(f'convergence: {fitted_error[0]}')
+    print(f'Error: {np.abs(u_exact.x.array - uh.x.array)}')
 
-pde.plot_convergence(L2_errors, mesh_sizes, 'Exact Burger SI', 'exact_burger_si_conv', location_figures)
-
+    xdmf_sol.close()
