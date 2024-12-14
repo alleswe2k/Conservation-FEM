@@ -12,6 +12,13 @@ For all of the above, convergence rate is to be reported for mesh sizes 1/4, 1/8
 
 # Progression map
 
+## W. 50
+This week we got the smoothness indicator to work as expected in FEniCSx, by including an activation function.
+Results (convergence, plots, comparisons) was produced for the linear advection, KPP and Burger equations.
+Also implemented a small function that smooths solution vector. Furthermore, we gave up on compressible
+euler to have more time for discussing and testing the things we have done already.
+Lastly, we've quickly tested smoothness indicator on linear advection for higher polynomial degrees than 1.
+
 ## W.49
 We continued working on the report, including our progress in the results as well as writing in other sections as well. Apart from the writing, we started implementing a solver for the Euler system of equations in FEniCSx. We also had our mock presentation. 
 
