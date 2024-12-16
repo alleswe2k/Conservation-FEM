@@ -96,7 +96,7 @@ u_old.interpolate(initial_condition)
 plot_func = fem.Function(V)
 plot_func.name = "plot_func"
 
-h_CG = get_nodal_h(domain)
+h_CG = get_nodal_h(domain, degree)
 
 CFL = 0.25 
 t = 0  # Start time

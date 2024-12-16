@@ -185,9 +185,9 @@ class SI:
             numerator = abs(numerator)
             denominator = max(denominator, 1e-8)
             alpha = numerator / denominator
-
+            alpha_psi = self.sigmoid_activation(alpha)
             # Store computed epsilon
-            epsilon_array[node] = alpha * self.Cm * hi * fi_norm
+            epsilon_array[node] = alpha_psi * self.Cm * hi * fi_norm
 
         return epsilon
 

@@ -30,6 +30,7 @@ pde = PDE_plot()
 # Enable or disable real-time plotting
 PLOT = False
 DISCONT = False
+STABILIZATION = "SI" # GFEM, RV or SI
 
 degrees = [1, 2, 3]
 for degree in degrees:

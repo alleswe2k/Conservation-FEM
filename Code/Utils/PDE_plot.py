@@ -93,4 +93,4 @@ class PDE_plot():
 
         # Save the plot
         plt.savefig(f'{location}/{filename}.png')
-        plt.show()
+        # plt.show()
