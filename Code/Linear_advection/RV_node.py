@@ -35,7 +35,7 @@ gmsh.model.occ.synchronize()
 gdim = 2
 gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
-mesh_size = 32
+mesh_size = 16
 hmax = 1/mesh_size
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
@@ -45,15 +45,16 @@ gmsh_model_rank = 0
 mesh_comm = MPI.COMM_WORLD
 domain, cell_markers, facet_markers = gmshio.model_to_mesh(gmsh.model, mesh_comm, gmsh_model_rank, gdim=gdim)
 
-V = fem.functionspace(domain, ("Lagrange", 1))
+degree = 2
+V = fem.functionspace(domain, ("Lagrange", degree))
 # domain.geometry.dim = (2, )
-W = fem.functionspace(domain, ("Lagrange", 1, (domain.geometry.dim, ))) # Lagrange 2 in documentation
+W = fem.functionspace(domain, ("Lagrange", degree, (domain.geometry.dim, ))) # Lagrange 2 in documentation
 DG0 = fem.functionspace(domain, ("DG", 0))
 
-# def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
-#     return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
 def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
-    return (x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2
+    return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
+# def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
+#     return (x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2
 
 def velocity_field(x):
     return np.array([-2*np.pi*x[1], 2*np.pi*x[0]])
@@ -84,7 +85,7 @@ T = 1.0  # Final time
 dt = CFL*hmax/w_inf_norm
 num_steps = int(np.ceil(T/dt))
 Cvel = 0.25
-CRV = 4.0
+CRV = 1.0
 eps = 1e-8
 
 rv = RV(Cvel, CRV, domain)
@@ -156,7 +157,7 @@ uh.x.scatter_forward()
 u_n.x.array[:] = uh.x.array
 
 # Write solution to file
-xdmf.write_function(uh, t)
+# xdmf.write_function(uh, t)
 
 epsilon = fem.Function(V)
 # Visualization of time dep. problem using pyvista
@@ -196,6 +197,11 @@ if PLOT:
     
     plotter_epsilon.view_xy()
 
+V_vis = fem.functionspace(domain, ("Lagrange", 1))
+uh_vis = fem.Function(V_vis)
+uh_vis.interpolate(u_n)
+xdmf.write_function(uh_vis, t)
+
 # """ Then time loop """
 for i in tqdm(range(num_steps-1)):
     t += dt
@@ -209,7 +215,7 @@ for i in tqdm(range(num_steps-1)):
     #Rh.x.array[:] = Rh.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
 
     #epsilon = fem.Function(V)
-    epsilon = rv.get_epsilon_linear(uh, u_n, w, Rh, h_CG, node_patches)
+    epsilon = rv.get_epsilon_linear(uh, u_n, w, Rh, h_CG, node_patches, degree)
 
     a = u * v * ufl.dx + 0.5 * dt * ufl.dot(w, ufl.grad(u)) * v * ufl.dx + 0.5 * epsilon * dt * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
     L = u_n * v * ufl.dx - 0.5 * dt * ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx - 0.5 * epsilon * dt * ufl.dot(ufl.grad(u_n), ufl.grad(v)) * ufl.dx
@@ -245,7 +251,8 @@ for i in tqdm(range(num_steps-1)):
     u_n.x.array[:] = uh.x.array
 
     # Write solution to file
-    xdmf.write_function(uh, t)
+    uh_vis.interpolate(uh)
+    xdmf.write_function(uh_vis, t)
     # Update plot
     if PLOT:
         new_warped = grid.warp_by_scalar("uh", factor=1)

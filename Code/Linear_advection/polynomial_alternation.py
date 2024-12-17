@@ -17,19 +17,20 @@ from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, a
 from Utils.PDE_plot import PDE_plot
 from Utils.PDE_realtime_plot import PDE_realtime_plot
 from Utils.SI import SI
+from Utils.RV import RV
 from Utils.helpers import get_nodal_h
 
 import os
-script_dir = os.path.dirname(os.path.abspath(__file__))
-location_figures = os.path.join(script_dir, 'Figures/SI')
-location_data = os.path.join(script_dir, 'Data/SI')
-
-pde = PDE_plot()
-# print(PETSc.ScalarType)
-
 # Enable or disable real-time plotting
 PLOT = False
 DISCONT = False
+STABILIZATION = "RV"
+script_dir = os.path.dirname(os.path.abspath(__file__))
+location_figures = os.path.join(script_dir, f"Figures/{STABILIZATION}")
+location_data = os.path.join(script_dir, f"Data/{STABILIZATION}")
+
+pde = PDE_plot()
+# print(PETSc.ScalarType)
 
 degrees = [1, 2, 3]
 for degree in degrees:
@@ -77,6 +78,10 @@ for degree in degrees:
         u_n.name = "u_n"
         u_n.interpolate(initial_condition)
 
+        u_old = fem.Function(V)
+        u_old.name = "u_old"
+        u_old.interpolate(initial_condition)
+
         u_ex = fem.Function(V_ex)
         u_ex.interpolate(initial_condition)
 
@@ -99,8 +104,11 @@ for degree in degrees:
         num_steps = int(np.ceil(T/dt))
         Cm = 0.5
         eps = 1e-8
+        Cvel = 0.25
+        CRV = 1.0
 
         si = SI(Cm, domain, eps)
+        rv = RV(Cvel, CRV, domain)
 
         # Create boundary condition
         fdim = domain.topology.dim - 1
@@ -154,15 +162,26 @@ for degree in degrees:
         numerator_func = fem.Function(V)
 
         # Time-dependent output
-        xdmf_sol = io.VTXWriter(domain.comm, 
-                                f"{location_data}/sol_{"discont" if DISCONT else "cont"}_D{degree}_h{fraction}.bp", 
-                                u_n, engine="BP4")
-        xdmf_eps = io.VTXWriter(domain.comm, 
-                                f"{location_data}/eps_{"discont" if DISCONT else "cont"}_h{fraction}.bp", 
-                                epsilon, engine="BP4")
+        # vtx_sol = io.VTXWriter(domain.comm, 
+        #                         f"{location_data}/sol_{"discont" if DISCONT else "cont"}_D{degree}_h{fraction}.bp", 
+        #                         u_n, engine="BP4")
+        # vtx_eps = io.VTXWriter(domain.comm, 
+        #                         f"{location_data}/eps_{"discont" if DISCONT else "cont"}_h{fraction}.bp", 
+        #                         epsilon, engine="BP4")
+        # xdmf_sol.write(t)
+        # xdmf_eps.write(t)
+        xdmf_sol = io.XDMFFile(domain.comm, f"{location_data}/sol_{"discont" if DISCONT else "cont"}_D{degree}_h{fraction}.xdmf", "w")
+        xdmf_eps = io.XDMFFile(domain.comm, f"{location_data}/eps_{"discont" if DISCONT else "cont"}_h{fraction}.xdmf", "w")
+        xdmf_sol.write_mesh(domain)
+        xdmf_eps.write_mesh(domain)
 
-        xdmf_sol.write(t)
-        xdmf_eps.write(t)
+        V_vis = fem.functionspace(domain, ("Lagrange", 1))
+        uh_vis = fem.Function(V_vis)
+        epsilon_vis = fem.Function(V_vis)
+        uh_vis.interpolate(u_n)
+        epsilon_vis.interpolate(epsilon)
+        xdmf_sol.write_function(uh_vis, t)
+        xdmf_eps.write_function(epsilon_vis, t)
 
         # Visualization of time dep. problem using pyvista
         # pde_realtime_plot = PDE_realtime_plot(location_figures, uh, epsilon, V, numerator_func)
@@ -171,12 +190,20 @@ for degree in degrees:
         for i in tqdm(range(num_steps)):
             t += dt
 
-            # print(max(epsilon.x.array), min(epsilon.x.array))
-            epsilon_placeholder = si.get_epsilon_linear(w, node_patches, h_CG, u_n, stiffness_matrix, numerator_func, degree)
-            epsilon.x.array[:] = epsilon_placeholder.x.array
-            # Update plot
-            # pde_realtime_plot.update_plot(uh, epsilon, numerator_func)
-            # input()
+            if STABILIZATION == "RV":
+                a_R = u * v * ufl.dx
+                L_R = 1/dt * u_n * v * ufl.dx - 1/dt * u_old * v * ufl.dx + ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx
+
+                # Solve linear system
+                problem = LinearProblem(a_R, L_R, bcs=[bc], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+                Rh = problem.solve() # returns dolfinx.fem.Function
+                #Rh.x.array[:] = Rh.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
+
+                #epsilon = fem.Function(V)
+                epsilon = rv.get_epsilon_linear(uh, u_n, w, Rh, h_CG, node_patches, degree)
+            elif STABILIZATION == "SI":
+                # print(max(epsilon.x.array), min(epsilon.x.array))
+                epsilon = si.get_epsilon_linear(w, node_patches, h_CG, u_n, stiffness_matrix, numerator_func, degree)
 
             a = u * v * ufl.dx + 0.5 * dt * ufl.dot(w, ufl.grad(u)) * v * ufl.dx + 0.5 * epsilon * dt * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
             L = u_n * v * ufl.dx - 0.5 * dt * ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx - 0.5 * epsilon * dt * ufl.dot(ufl.grad(u_n), ufl.grad(v)) * ufl.dx
@@ -206,13 +233,16 @@ for degree in degrees:
             uh.x.scatter_forward()
 
             # Update solution at previous time step (u_n)
+            u_old.x.array[:] = u_n.x.array
             u_n.x.array[:] = uh.x.array
 
             # Write solution to file
-            # xdmf_sol.write_function(uh, t)
-            # xdmf_eps.write_function(epsilon, t)
-            xdmf_sol.write(t)
-            xdmf_eps.write(t)
+            uh_vis.interpolate(uh)
+            epsilon_vis.interpolate(epsilon)
+            xdmf_sol.write_function(uh_vis, t)
+            xdmf_eps.write_function(epsilon_vis, t)
+            # xdmf_sol.write(t)
+            # xdmf_eps.write(t)
 
         # pde_realtime_plot.close()
         xdmf_sol.close()
@@ -230,4 +260,4 @@ for degree in degrees:
         # pde.plot_pv(domain, fraction, uh, f'Solution at t = {T} with SI', 'cont_lin_adv_SI', location_figures)
         # pde.plot_pv(domain, fraction, uh, f'Solution at t = {T} with SI', 'cont_lin_adv_SI_3d', location_figures)
 
-    pde.plot_convergence(L2_errors, fractions, f"P{degree} convergence", f"conv_{"discont" if DISCONT else "cont"}_D{degree}_alt", location_figures)
+    pde.plot_convergence(L2_errors, fractions, f"P{degree} convergence", f"conv_{"discont" if DISCONT else "cont"}_D{degree}", location_figures)
