@@ -31,6 +31,35 @@ location_data = os.path.join(script_dir, f"Data/GFEM")
 pde = PDE_plot()
 # print(PETSc.ScalarType)
 
+# def error_L2(uh, u_ex, degree_raise=3):
+#     # Create higher order function space
+#     degree = uh.function_space.ufl_element().degree
+#     family = uh.function_space.ufl_element().family_name
+#     mesh = uh.function_space.mesh
+#     W = fem.functionspace(mesh, (family, degree + degree_raise))
+#     # Interpolate approximate solution
+#     u_W = fem.Function(W)
+#     u_W.interpolate(uh)
+
+#     # Interpolate exact solution, special handling if exact solution
+#     # is a ufl expression or a python lambda function
+#     u_ex_W = fem.Function(W)
+#     if isinstance(u_ex, ufl.core.expr.Expr):
+#         u_expr = fem.Expression(u_ex, W.element.interpolation_points())
+#         u_ex_W.interpolate(u_expr)
+#     else:
+#         u_ex_W.interpolate(u_ex)
+
+#     # Compute the error in the higher order function space
+#     e_W = fem.Function(W)
+#     e_W.x.array[:] = u_W.x.array - u_ex_W.x.array
+
+#     # Integrate the error
+#     error = fem.form(ufl.inner(e_W, e_W) * ufl.dx)
+#     error_local = fem.assemble_scalar(error)
+#     error_global = mesh.comm.allreduce(error_local, op=MPI.SUM)
+#     return np.sqrt(error_global)
+
 degrees = [1, 2, 3]
 for degree in degrees:
     fractions = [4, 8, 16, 32]
@@ -46,7 +75,7 @@ for degree in degrees:
         gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
         hmax = 1/fraction # 0.05 in example
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
+        # gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
         gmsh.model.mesh.generate(gdim)
 
@@ -59,7 +88,6 @@ for degree in degrees:
         V_ex = fem.functionspace(domain, ("Lagrange", degree*2))
         # domain.geometry.dim = (2, )
         W = fem.functionspace(domain, ("Lagrange", degree, (domain.geometry.dim, ))) # Lagrange 2 in documentation
-        DG0 = fem.functionspace(domain, ("DG", 0))
 
         if DISCONT:
             """ Discont. IC """
@@ -168,6 +196,8 @@ for degree in degrees:
 
         # Updating the solution and rhs per time step
         for i in range(num_steps):
+            if t+dt > T:
+                dt = T-t
             t += dt
             # print(t)
 
@@ -198,19 +228,31 @@ for degree in degrees:
                 warped.point_data["uh"][:] = uh.x.array
                 plotter.write_frame()
 
+        print(t)
         # pde_realtime_plot.close()
         xdmf.close()
 
         error_L2 = np.sqrt(domain.comm.allreduce(fem.assemble_scalar(fem.form((uh - u_ex)**2 * ufl.dx)), op=MPI.SUM))
         if domain.comm.rank == 0:
             print(f"L2-error: {error_L2:.2e}")
-        
         L2_errors.append(error_L2)
-        
+
+
+        # error = error_L2(uh, u_ex)
+        # print(f"L2-error: {error:.2e}")
+        # L2_errors.append(error)
+
         gmsh.finalize()
 
         # pde.plot_pv(domain, fraction, epsilon, 'Epsilon', 'cont_epsilon_2d_SI', location_figures, plot_2d=True)
         # pde.plot_pv(domain, fraction, uh, f'Solution at t = {T} with SI', 'cont_lin_adv_SI', location_figures)
         # pde.plot_pv(domain, fraction, uh, f'Solution at t = {T} with SI', 'cont_lin_adv_SI_3d', location_figures)
 
+    print("D=", degree, "Errors=", L2_errors)
     pde.plot_convergence(L2_errors, fractions, f"P{degree} convergence", f"conv_{"discont" if DISCONT else "cont"}_D{degree}", location_figures)
+    hs = [1/fraction for fraction in fractions]
+    L2_errors = np.array(L2_errors)
+    hs = np.array(hs)
+    print(L2_errors, hs)
+    rates = np.log(L2_errors[1:] / L2_errors[:-1]) / np.log(hs[1:] / hs[:-1])
+    print(f"Rates: {rates}")

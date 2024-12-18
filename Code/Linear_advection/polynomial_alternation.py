@@ -23,7 +23,7 @@ from Utils.helpers import get_nodal_h
 import os
 # Enable or disable real-time plotting
 PLOT = False
-DISCONT = False
+DISCONT = True
 STABILIZATION = "RV"
 script_dir = os.path.dirname(os.path.abspath(__file__))
 location_figures = os.path.join(script_dir, f"Figures/{STABILIZATION}")
