@@ -62,7 +62,7 @@ pde = PDE_plot()
 
 degrees = [1, 2, 3]
 for degree in degrees:
-    fractions = [4, 8, 16]
+    fractions = [4, 8, 16, 32]
     L2_errors = []
     for fraction in fractions:
         # Creating mesh
@@ -104,6 +104,15 @@ for degree in degrees:
         u_n = fem.Function(V)
         u_n.name = "u_n"
         u_n.interpolate(initial_condition)
+
+        # For BDF4
+        u1 = fem.Function(V)
+        u1.interpolate(initial_condition)
+        u2 = fem.Function(V)
+        u2.interpolate(initial_condition)
+        u3 = fem.Function(V)
+        u3.interpolate(initial_condition)
+
 
         u_ex = fem.Function(V)
         u_ex.interpolate(initial_condition)
@@ -148,10 +157,11 @@ for degree in degrees:
         # Variational problem and solver
         u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
         f = fem.Constant(domain, PETSc.ScalarType(0))
-        a = u * v * ufl.dx + 0.5 * dt * ufl.dot(w, ufl.grad(u)) * v * ufl.dx
-        L = u_n * v * ufl.dx - 0.5 * dt * ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx
-        # a = u * v * ufl.dx + dt * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
-        # L = (u_n + dt * f) * v * ufl.dx
+        a = 25*u*v *ufl.dx + 12*dt*ufl.dot(w, ufl.grad(u)) * v * ufl.dx
+        L = (   48*u_n*v*ufl.dx -
+                36*u1*v*ufl.dx +
+                16*u2*v*ufl.dx -
+                3*u3*v*ufl.dx)
 
         # Preparing linear algebra structures for time dep. problems
         bilinear_form = fem.form(a)
@@ -216,10 +226,15 @@ for degree in degrees:
             uh.x.scatter_forward()
 
             # Update solution at previous time step (u_n)
+            # u_n.x.array[:] = uh.x.array
+
+            u3.x.array[:] = u2.x.array
+            u2.x.array[:] = u1.x.array
+            u1.x.array[:] = u_n.x.array
             u_n.x.array[:] = uh.x.array
 
             # Write solution to file
-            uh_vis.interpolate(uh)
+            uh_vis.interpolate(u_n)
             xdmf.write_function(uh_vis, t)
             # Update plot
             if PLOT:

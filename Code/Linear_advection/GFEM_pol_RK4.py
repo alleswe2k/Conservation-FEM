@@ -62,7 +62,7 @@ pde = PDE_plot()
 
 degrees = [1, 2, 3]
 for degree in degrees:
-    fractions = [4, 8, 16]
+    fractions = [4, 8, 16, 32]
     L2_errors = []
     for fraction in fractions:
         # Creating mesh
@@ -75,7 +75,7 @@ for degree in degrees:
         gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
         hmax = 1/fraction # 0.05 in example
-        # gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
         gmsh.model.mesh.generate(gdim)
 
@@ -105,6 +105,9 @@ for degree in degrees:
         u_n.name = "u_n"
         u_n.interpolate(initial_condition)
 
+        u_tmp = fem.Function(V)
+        u_tmp.name = "u_tmp"
+
         u_ex = fem.Function(V)
         u_ex.interpolate(initial_condition)
 
@@ -123,7 +126,7 @@ for degree in degrees:
         CFL = 0.2
         t = 0  # Start time
         T = 1.0  # Final time
-        dt = CFL*hmax/w_inf_norm / (degree**2)
+        dt = CFL*hmax/w_inf_norm
         num_steps = int(np.ceil(T/dt))
 
         # print("Infinity norm of the velocity field w:", w_inf_norm)
@@ -143,25 +146,16 @@ for degree in degrees:
         uh.name = "uh"
         uh.interpolate(initial_condition)
         # xdmf.write_function(uh, t)
-
-
+        
         # Variational problem and solver
         u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
         f = fem.Constant(domain, PETSc.ScalarType(0))
-        a = u * v * ufl.dx + 0.5 * dt * ufl.dot(w, ufl.grad(u)) * v * ufl.dx
-        L = u_n * v * ufl.dx - 0.5 * dt * ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx
-        # a = u * v * ufl.dx + dt * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
-        # L = (u_n + dt * f) * v * ufl.dx
 
-        # Preparing linear algebra structures for time dep. problems
+        a = u * v * ufl.dx
         bilinear_form = fem.form(a)
-        linear_form = fem.form(L)
-
         # A does not change through time, but b does
         A = assemble_matrix(bilinear_form, bcs=[bc])
         A.assemble()
-        b = create_vector(linear_form)
-
         # Can no longer use LinearProblem to solve since we already
         # assembled a into matrix A. Therefore, create linear algebra solver with petsc4py
         solver = PETSc.KSP().create(domain.comm)
@@ -178,7 +172,7 @@ for degree in degrees:
             plotter = pyvista.Plotter()
             plotter.open_gif("linear_advection.gif", fps=10)
 
-            grid.point_data["uh"] = uh.x.array
+            grid.point_data["uh"] = u_n.x.array
             warped = grid.warp_by_scalar("uh", factor=1)
 
             viridis = mpl.colormaps.get_cmap("viridis").resampled(25)
@@ -187,52 +181,117 @@ for degree in degrees:
 
             renderer = plotter.add_mesh(warped, show_edges=True, lighting=False,
                                         cmap=viridis, scalar_bar_args=sargs,
-                                        clim=[0, max(uh.x.array)])
+                                        clim=[0, max(u_n.x.array)])
         
+        a = u * v * ufl.dx
+        bilinear_form = fem.form(a)
+        # A does not change through time, but b does
+        A = assemble_matrix(bilinear_form, bcs=[bc])
+        A.assemble()
+        # Can no longer use LinearProblem to solve since we already
+        # assembled a into matrix A. Therefore, create linear algebra solver with petsc4py
+        solver = PETSc.KSP().create(domain.comm)
+        solver.setOperators(A)
+        solver.setType(PETSc.KSP.Type.PREONLY)
+        solver.getPC().setType(PETSc.PC.Type.LU)
+
         V_vis = fem.functionspace(domain, ("Lagrange", 1))
         uh_vis = fem.Function(V_vis)
         uh_vis.interpolate(u_n)
         xdmf.write_function(uh_vis, t)
 
         # Updating the solution and rhs per time step
-        for i in range(num_steps):
+        for i in tqdm(range(num_steps)):
             if t+dt > T:
                 dt = T-t
             t += dt
             # print(t)
 
-            # Update the right hand side reusing the initial vector
+            L = -ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx
+
+            # Preparing linear algebra structures for time dep. problems
+            linear_form = fem.form(L)
+            b = create_vector(linear_form)
+
+            # Stage 1
             with b.localForm() as loc_b:
                 loc_b.set(0)
             assemble_vector(b, linear_form)
-
-            # Apply Dirichlet boundary condition to the vector
             apply_lifting(b, [bilinear_form], [[bc]])
             b.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
             set_bc(b, [bc])
-            
-            # Solve linear problem
             solver.solve(b, uh.x.petsc_vec)
             uh.x.scatter_forward()
+            k1 = uh.x.array.copy()
 
-            # Update solution at previous time step (u_n)
-            u_n.x.array[:] = uh.x.array
+            # Stage 2
+            u_tmp.x.array[:] = u_n.x.array + 0.5 * dt * k1
+
+            L = -ufl.dot(w, ufl.grad(u_tmp)) * v * ufl.dx
+            linear_form = fem.form(L)
+            b = create_vector(linear_form)
+
+            with b.localForm() as loc_b:
+                loc_b.set(0)
+            assemble_vector(b, linear_form)
+            apply_lifting(b, [bilinear_form], [[bc]])
+            b.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
+            set_bc(b, [bc])
+            solver.solve(b, uh.x.petsc_vec)
+            uh.x.scatter_forward()
+            k2 = uh.x.array.copy()
+
+            # Stage 3
+            u_tmp.x.array[:] = u_n.x.array + 0.5 * dt * k2
+
+            L = -ufl.dot(w, ufl.grad(u_tmp)) * v * ufl.dx
+            linear_form = fem.form(L)
+            b = create_vector(linear_form)
+
+            with b.localForm() as loc_b:
+                loc_b.set(0)
+            assemble_vector(b, linear_form)
+            apply_lifting(b, [bilinear_form], [[bc]])
+            b.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
+            set_bc(b, [bc])
+            solver.solve(b, uh.x.petsc_vec)
+            uh.x.scatter_forward()
+            k3 = uh.x.array.copy()
+
+            # Stage 4
+            u_tmp.x.array[:] = u_n.x.array + dt * k3
+
+            L = -ufl.dot(w, ufl.grad(u_tmp)) * v * ufl.dx
+            linear_form = fem.form(L)
+            b = create_vector(linear_form)
+
+            with b.localForm() as loc_b:
+                loc_b.set(0)
+            assemble_vector(b, linear_form)
+            apply_lifting(b, [bilinear_form], [[bc]])
+            b.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
+            set_bc(b, [bc])
+            solver.solve(b, uh.x.petsc_vec)
+            uh.x.scatter_forward()
+            k4 = uh.x.array.copy()
+
+            # Final update
+            u_n.x.array[:] += (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
 
             # Write solution to file
-            uh_vis.interpolate(uh)
+            uh_vis.interpolate(u_n)
             xdmf.write_function(uh_vis, t)
             # Update plot
             if PLOT:
                 new_warped = grid.warp_by_scalar("uh", factor=1)
                 warped.points[:, :] = new_warped.points
-                warped.point_data["uh"][:] = uh.x.array
+                warped.point_data["uh"][:] = u_n.x.array
                 plotter.write_frame()
 
-        print(t)
         # pde_realtime_plot.close()
         xdmf.close()
 
-        error_L2 = np.sqrt(domain.comm.allreduce(fem.assemble_scalar(fem.form((uh - u_ex)**2 * ufl.dx)), op=MPI.SUM))
+        error_L2 = np.sqrt(domain.comm.allreduce(fem.assemble_scalar(fem.form((u_n - u_ex)**2 * ufl.dx)), op=MPI.SUM))
         if domain.comm.rank == 0:
             print(f"L2-error: {error_L2:.2e}")
         L2_errors.append(error_L2)

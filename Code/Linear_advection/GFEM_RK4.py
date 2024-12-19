@@ -20,7 +20,7 @@ location_data = os.path.join(script_dir, 'Data/GFEM/solution.xdmf')
 
 # Enable or disable real-time plotting
 pde = PDE_plot()
-PLOT = True
+PLOT = False
 
 # Creating mesh
 gmsh.initialize()
@@ -81,7 +81,7 @@ w_inf_norm = np.linalg.norm(w_values, ord=np.inf)
 # w_inf_norm = np.max(w_norms)
 
 # Define temporal parameters
-CFL = 0.5
+CFL = 0.2
 t = 0  # Start time
 T = 1  # Final time
 dt = CFL*hmax/w_inf_norm
@@ -103,10 +103,9 @@ xdmf.write_mesh(domain)
 uh = fem.Function(V)
 uh.name = "uh"
 uh.interpolate(initial_condition)
-xdmf.write_function(uh, t)
 
-pde.plot_pv(domain, mesh_size, uh, 'Initial condition', 'init_cond_cont_IC', location_figures, plot_2d=True)
-pde.plot_pv(domain, mesh_size, uh, 'Initial condition', 'init_cond_cont_IC_3d', location_figures)
+# pde.plot_pv(domain, mesh_size, uh, 'Initial condition', 'init_cond_cont_IC', location_figures, plot_2d=True)
+# pde.plot_pv(domain, mesh_size, uh, 'Initial condition', 'init_cond_cont_IC_3d', location_figures)
 
 
 # Variational problem and solver
@@ -142,8 +141,13 @@ solver = PETSc.KSP().create(domain.comm)
 solver.setOperators(A)
 solver.setType(PETSc.KSP.Type.PREONLY)
 solver.getPC().setType(PETSc.PC.Type.LU)
+
+xdmf.write_function(u_n, t)
+
 # Updating the solution and rhs per time step
 for i in range(num_steps):
+    t = t+dt
+    print(t)
     L = -ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx
     # a = u * v * ufl.dx + dt * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
     # L = (u_n + dt * f) * v * ufl.dx
@@ -224,8 +228,6 @@ for i in range(num_steps):
 
     # Write solution to file
     xdmf.write_function(u_n, t)
-    t = t+dt
-    print(t)
     # Update plot
     if PLOT:
         new_warped = grid.warp_by_scalar("uh", factor=1)

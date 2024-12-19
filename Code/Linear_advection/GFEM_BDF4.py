@@ -63,6 +63,14 @@ u_n = fem.Function(V)
 u_n.name = "u_n"
 u_n.interpolate(initial_condition)
 
+# For BDF4
+u1 = fem.Function(V)
+u1.interpolate(initial_condition)
+u2 = fem.Function(V)
+u2.interpolate(initial_condition)
+u3 = fem.Function(V)
+u3.interpolate(initial_condition)
+
 u_ex = fem.Function(V)
 u_ex.interpolate(initial_condition)
 
@@ -78,7 +86,7 @@ w_inf_norm = np.linalg.norm(w_values, ord=np.inf)
 # w_inf_norm = np.max(w_norms)
 
 # Define temporal parameters
-CFL = 0.5
+CFL = 0.2
 t = 0  # Start time
 T = 1.0  # Final time
 dt = CFL*hmax/w_inf_norm
@@ -100,7 +108,7 @@ xdmf.write_mesh(domain)
 uh = fem.Function(V)
 uh.name = "uh"
 uh.interpolate(initial_condition)
-# xdmf.write_function(uh, t)
+xdmf.write_function(u_n, t)
 
 pde.plot_pv(domain, mesh_size, uh, 'Initial condition', 'init_cond_cont_IC', location_figures, plot_2d=True)
 pde.plot_pv(domain, mesh_size, uh, 'Initial condition', 'init_cond_cont_IC_3d', location_figures)
@@ -109,10 +117,11 @@ pde.plot_pv(domain, mesh_size, uh, 'Initial condition', 'init_cond_cont_IC_3d', 
 # Variational problem and solver
 u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
 f = fem.Constant(domain, PETSc.ScalarType(0))
-a = u * v * ufl.dx
-L = -ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx
-# a = u * v * ufl.dx + dt * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
-# L = (u_n + dt * f) * v * ufl.dx
+a = 25*u*v *ufl.dx + 12*dt*ufl.dot(w, ufl.grad(u)) * v * ufl.dx
+L = (   48*u_n*v*ufl.dx -
+        36*u1*v*ufl.dx +
+        16*u2*v*ufl.dx -
+        3*u3*v*ufl.dx)
 
 # Preparing linear algebra structures for time dep. problems
 bilinear_form = fem.form(a)
@@ -153,9 +162,10 @@ if PLOT:
 # Updating the solution and rhs per time step
 for i in range(num_steps):
     t += dt
-    # print(t)
+    print(t)
 
     # Update the right hand side reusing the initial vector
+    # b = fem.petsc.assemble_vector(linear_form)
     with b.localForm() as loc_b:
         loc_b.set(0)
     assemble_vector(b, linear_form)
@@ -169,11 +179,16 @@ for i in range(num_steps):
     solver.solve(b, uh.x.petsc_vec)
     uh.x.scatter_forward()
 
+    u3.x.array[:] = u2.x.array
+    u2.x.array[:] = u1.x.array
+    u1.x.array[:] = u_n.x.array
+    u_n.x.array[:] = uh.x.array
+
     # Update solution at previous time step (u_n)
     u_n.x.array[:] = uh.x.array
 
     # Write solution to file
-    xdmf.write_function(uh, t)
+    xdmf.write_function(u_n, t)
     # Update plot
     if PLOT:
         new_warped = grid.warp_by_scalar("uh", factor=1)
