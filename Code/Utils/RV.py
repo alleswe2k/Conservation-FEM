@@ -9,23 +9,23 @@ class RV:
         self.Crv = Crv
         self.domain = domain
 
-    def get_epsilon_linear(self, w, residual, h):
-        V = fem.functionspace(self.domain, ("Lagrange", 1))
-        epsilon = fem.Function(V)
+    # def get_epsilon_linear(self, w, residual, h, degree=1):
+    #     V = fem.functionspace(self.domain, ("Lagrange", degree))
+    #     epsilon = fem.Function(V)
         
-        # TODO: use num_nodes instead of residual.x.array.size
-        for node in range(residual.x.array.size):
-            hi = h.x.array[node]
-            Ri = residual.x.array[node]
-            w_values = w.x.array.reshape((-1, self.domain.geometry.dim))
-            fi = w_values[node]
-            fi_norm = np.linalg.norm(fi)
-            epsilon.x.array[node] = min(self.Cvel * hi * fi_norm, self.Crv * hi ** 2 * np.abs(Ri))
+    #     # TODO: use num_nodes instead of residual.x.array.size
+    #     for node in range(residual.x.array.size):
+    #         hi = h.x.array[node]
+    #         Ri = residual.x.array[node]
+    #         w_values = w.x.array.reshape((-1, self.domain.geometry.dim))
+    #         fi = w_values[node]
+    #         fi_norm = np.linalg.norm(fi)
+    #         epsilon.x.array[node] = min(self.Cvel * hi * fi_norm, self.Crv * hi ** 2 * np.abs(Ri))
         
-        return epsilon
+    #     return epsilon
     
-    def get_epsilon(self, uh, velocity_field, residual, h):
-        V = fem.functionspace(self.domain, ("Lagrange", 1))
+    def get_epsilon(self, uh, velocity_field, residual, h, degree=1):
+        V = fem.functionspace(self.domain, ("Lagrange", degree))
         epsilon = fem.Function(V)
         
         # TODO: use num_nodes instead of residual.x.array.size
@@ -39,8 +39,8 @@ class RV:
         
         return epsilon
     
-    def get_epsilon_1storder(self, uh, velocity_field, residual, h):
-        V = fem.functionspace(self.domain, ("Lagrange", 1))
+    def get_epsilon_1storder(self, uh, velocity_field, residual, h, degree=1):
+        V = fem.functionspace(self.domain, ("Lagrange", degree))
         epsilon = fem.Function(V)
         
         # TODO: use num_nodes instead of residual.x.array.size
@@ -53,8 +53,8 @@ class RV:
             epsilon.x.array[node] = 0.5*hi*fi_norm        
         return epsilon
 
-    def get_epsilon_nonlinear(self, uh, u_n, velocity_field, Rh, h_CG, node_patches): #From Murtazos notes and paper, good one
-        V = fem.functionspace(self.domain, ("Lagrange", 1))
+    def get_epsilon_nonlinear(self, uh, u_n, velocity_field, Rh, h_CG, node_patches, degree=1): #From Murtazos notes and paper, good one
+        V = fem.functionspace(self.domain, ("Lagrange", degree))
         epsilon = fem.Function(V)
         absolute_term = np.linalg.norm(uh.x.array - np.mean(uh.x.array), ord=np.inf)
 
@@ -89,8 +89,8 @@ class RV:
 
         return epsilon
     
-    def get_epsilon_linear(self, uh, u_n, velocity_field, Rh, h_CG, node_patches): #From Murtazos notes and paper, good one
-        V = fem.functionspace(self.domain, ("Lagrange", 1))
+    def get_epsilon_linear(self, uh, u_n, velocity_field, Rh, h_CG, node_patches, degree=1): #From Murtazos notes and paper, good one
+        V = fem.functionspace(self.domain, ("Lagrange", degree))
         epsilon = fem.Function(V)
         absolute_term = np.linalg.norm(uh.x.array - np.mean(uh.x.array), ord=np.inf)
 

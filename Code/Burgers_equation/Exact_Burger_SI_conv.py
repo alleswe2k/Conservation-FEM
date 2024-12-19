@@ -19,7 +19,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 location_figures = os.path.join(script_dir, 'Figures/SI') # location = './Figures'
 
 L2_errors = []
-mesh_sizes = np.array([10, 20, 100, 200])
+mesh_sizes = np.array([50, 100, 200])
 pde = PDE_plot()
 
 def velocity_field(u):
@@ -93,14 +93,17 @@ for mesh_size in mesh_sizes:
     u_old.name = "u_old"
     u_old.interpolate(initial_condition)
 
-    CFL = 0.2
+    h_CG = get_nodal_h(domain)
+
+    CFL = 0.5 # 0.2 in benchmark paper
     t = 0  # Start time
     T = 0.5 # Final time
-    dt = 0.01
+    dt = CFL * min(h_CG.x.array)
     num_steps = int(np.ceil(T/dt))
     Cm = 0.5
+    eps = 1e-8
 
-    si = SI(Cm, domain)
+    si = SI(Cm, domain, eps)
 
     """ Creat patch dictionary """
     node_patches = si.get_patch_dictionary()
@@ -129,9 +132,8 @@ for mesh_size in mesh_sizes:
     u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
 
 
-    h_CG = get_nodal_h(domain)
-
-    for i in tqdm(range(num_steps)):
+    plot_func = fem.Function(V)
+    for i in tqdm(range(num_steps-1)):
         t += dt
         # Create a function to interpolate the exact solution
         u_exact_boundary = fem.Function(V)
@@ -145,7 +147,7 @@ for mesh_size in mesh_sizes:
         A = assemble_matrix(fem.form(a), bcs=[bc])
         A.assemble()
 
-        epsilon = si.get_epsilon(velocity_field, node_patches, h_CG, u_n, A)
+        epsilon = si.get_epsilon_nonlinear(velocity_field, node_patches, h_CG, u_n, A, plot_func)
         
         F = (uh*v *ufl.dx - u_n*v *ufl.dx + 
             0.5*dt*ufl.dot(velocity_field(uh), ufl.grad(uh))*v*ufl.dx + 
@@ -168,6 +170,7 @@ for mesh_size in mesh_sizes:
         u_old.x.array[:] = u_n.x.array
         u_n.x.array[:] = uh.x.array
 
+    print(t)
     error_L2 = np.sqrt(domain.comm.allreduce(fem.assemble_scalar(fem.form((uh - u_exact)**2 * ufl.dx)), op=MPI.SUM))
     if domain.comm.rank == 0:
         print(f"L2-error: {error_L2:.2e}")

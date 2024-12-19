@@ -4,6 +4,7 @@ import pyvista
 import ufl
 import numpy as np
 import os
+from tqdm import tqdm
 
 from petsc4py import PETSc
 from mpi4py import MPI
@@ -28,7 +29,7 @@ pde = PDE_plot()
 # print(PETSc.ScalarType)
 
 # Enable or disable real-time plotting
-PLOT = True
+PLOT = False
 # Creating mesh
 gmsh.initialize()
 
@@ -151,16 +152,16 @@ epsilon = fem.Function(V)
 numerator_func = fem.Function(V)
 
 # Visualization of time dep. problem using pyvista
-pde_realtime_plot = PDE_realtime_plot(location_figures, uh, epsilon, V, numerator_func)
+# pde_realtime_plot = PDE_realtime_plot(location_figures, uh, epsilon, V, numerator_func)
 
 # """ Then time loop """
-for i in range(num_steps):
+for i in tqdm(range(num_steps)):
     t += dt
 
     # print(max(epsilon.x.array), min(epsilon.x.array))
     epsilon = si.get_epsilon_linear(w, node_patches, h_CG, u_n, stiffness_matrix, numerator_func)
      # Update plot
-    pde_realtime_plot.update_plot(uh, epsilon, numerator_func)
+    # pde_realtime_plot.update_plot(uh, epsilon, numerator_func)
     # input()
 
     a = u * v * ufl.dx + 0.5 * dt * ufl.dot(w, ufl.grad(u)) * v * ufl.dx + 0.5 * epsilon * dt * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
@@ -196,11 +197,13 @@ for i in range(num_steps):
     # Write solution to file
     xdmf.write_function(uh, t)
 
-pde_realtime_plot.close()
+# pde_realtime_plot.close()
 xdmf.close()
 
 error_L2 = np.sqrt(domain.comm.allreduce(fem.assemble_scalar(fem.form((uh - u_ex)**2 * ufl.dx)), op=MPI.SUM))
 if domain.comm.rank == 0:
     print(f"L2-error: {error_L2:.2e}")
 
-pde.plot_pv_2d(domain, fraction, epsilon, 'Epsilon', 'epsilon_2d', location=location_figures)
+pde.plot_pv(domain, fraction, epsilon, 'Epsilon', 'cont_epsilon_2d_SI', location_figures, plot_2d=True)
+pde.plot_pv(domain, fraction, uh, f'Solution at t = {T} with SI', 'cont_lin_adv_SI', location_figures)
+pde.plot_pv(domain, fraction, uh, f'Solution at t = {T} with SI', 'cont_lin_adv_SI_3d', location_figures)
