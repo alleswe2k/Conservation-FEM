@@ -129,15 +129,15 @@ class RV:
     def get_epsilon_linear_simple(self, w, residual, u_n, h, degree=1):
         V = fem.functionspace(self.domain, ("Lagrange", degree))
         epsilon = fem.Function(V)
-        residual.x.array[:] = residual.x.array / np.max(u_n.x.array - np.mean(u_n.x.array))
+        residual.x.array[:] = residual.x.array / np.linalg.norm(u_n.x.array - np.mean(u_n.x.array), ord=np.inf)
+        w_values = w.x.array.reshape((-1, self.domain.geometry.dim))
         
         for node in range(residual.x.array.size):
             hi = h.x.array[node]
             Ri = residual.x.array[node]
-            w_values = w.x.array.reshape((-1, self.domain.geometry.dim))
             fi = w_values[node]
             fi_norm = np.linalg.norm(fi)
-            epsilon.x.array[node] = min(self.Cvel * hi * fi_norm, self.Crv * hi ** 2 * np.abs(Ri))
+            epsilon.x.array[node] = min(self.Cvel * hi * fi_norm, self.Crv * hi ** 2 * np.linalg.norm(Ri))
         
         return epsilon
     
