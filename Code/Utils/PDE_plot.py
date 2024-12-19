@@ -93,3 +93,17 @@ class PDE_plot():
         # Save the plot
         plt.savefig(f'{location}/{filename}.png')
         plt.show()
+
+
+    def plot_grid(self, domain, location="Figures"):
+        tdim = domain.topology.dim
+        os.environ["PYVISTA_OFF_SCREEN"] = "True"
+        pv.start_xvfb()
+        plotter = pv.Plotter(off_screen=True)
+        domain.topology.create_connectivity(tdim, tdim)
+        topology, cell_types, geometry = plot.vtk_mesh(domain, tdim)
+        grid = pv.UnstructuredGrid(topology, cell_types, geometry)
+
+        plotter.add_mesh(grid, show_edges=True)
+        plotter.view_xy()
+        plotter.screenshot(f"{location}/grid.png")
