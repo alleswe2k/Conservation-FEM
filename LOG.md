@@ -12,6 +12,9 @@ For all of the above, convergence rate is to be reported for mesh sizes 1/4, 1/8
 
 # Progression map
 
+## W. 51
+We have continued writing in the report, adding and commenting on the results. We have implemented higher order polynomials and checked convergence. The added results included the convergence rates of the higher order polynomials, epsilon plots and convergence tables for artificial diffusion. We have rewritten the abstract introduction to include more theory to achieve more meat on the bones of the report. Lastly, we’ve tried higher order polynomials with RK4 instead of Crank Nicholson.
+
 ## W. 50
 This week we got the smoothness indicator to work as expected in FEniCSx, by including an activation function.
 Results (convergence, plots, comparisons) was produced for the linear advection, KPP and Burger equations.
@@ -27,7 +30,6 @@ We have been working on our presentation, and figuring out the structure of the 
 
 ## W. 47 
 We have gone through the code and verified each part, the code now yields more accurate figures regarding the exact burgers and KPP. We have also tested the BDF2 method of calculating RH for burgers and KPP as well as a different approach of normalizing the residual. We went through our Github repo and restructured the folder for an easier time navigating it. 
-
 
 ## w. 46
 We've implemented residual viscosity, both cell based and nodal based. This was tested on the
