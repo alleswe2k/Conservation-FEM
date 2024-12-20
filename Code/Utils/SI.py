@@ -144,7 +144,7 @@ class SI:
     #         epsilon_array[node] = alpha_psi * self.Cm * hi * fi_norm
 
     #     return epsilon
-    def get_epsilon_linear(self, w, node_patches, h_CG, u_n, stiffness_matrix, numerator_func, degree=1):
+    def get_epsilon_linear(self, w, h_CG, u_n, stiffness_matrix, degree=1):
         # Create a function to store epsilon
         V = fem.functionspace(self.domain, ("Lagrange", degree))
         epsilon = fem.Function(V)
