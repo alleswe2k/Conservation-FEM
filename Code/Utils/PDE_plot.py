@@ -93,7 +93,7 @@ class PDE_plot():
 
         # Save the plot
         plt.savefig(f'{location}/{filename}.png')
-        plt.show()
+        # plt.show()
 
 
     def plot_grid(self, domain, location="Figures"):

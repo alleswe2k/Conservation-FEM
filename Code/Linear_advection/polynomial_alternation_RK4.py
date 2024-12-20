@@ -24,7 +24,7 @@ import os
 # Enable or disable real-time plotting
 PLOT = False
 DISCONT = False
-STABILIZATION = "SI"
+STABILIZATION = "RV"
 script_dir = os.path.dirname(os.path.abspath(__file__))
 location_figures = os.path.join(script_dir, f"Figures/{STABILIZATION}")
 location_data = os.path.join(script_dir, f"Data/{STABILIZATION}")
@@ -34,7 +34,7 @@ pde = PDE_plot()
 
 degrees = [1, 2, 3]
 for degree in degrees:
-    fractions = [4, 8, 16, 32]
+    fractions = [4, 8, 16]
     L2_errors = []
     for fraction in fractions:
         # Creating mesh
@@ -103,7 +103,7 @@ for degree in degrees:
         CFL = 0.2
         t = 0  # Start time
         T = 1.0  # Final time
-        dt = CFL*hmax/w_inf_norm
+        dt = CFL*hmax/w_inf_norm / degree
         num_steps = int(np.ceil(T/dt))
         Cm = 0.5
         eps = 1e-8
@@ -194,7 +194,7 @@ for degree in degrees:
                 # print(max(epsilon.x.array), min(epsilon.x.array))
                 epsilon = si.get_epsilon_linear(w, node_patches, h_CG, u_n, stiffness_matrix, numerator_func, degree)
 
-            L = -ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx + epsilon * dt * ufl.dot(ufl.grad(u_n), ufl.grad(v)) * ufl.dx
+            L = -ufl.dot(w, ufl.grad(u_n)) * v * ufl.dx - epsilon * ufl.dot(ufl.grad(u_n), ufl.grad(v)) * ufl.dx
 
             # Preparing linear algebra structures for time dep. problems
             linear_form = fem.form(L)
@@ -214,7 +214,7 @@ for degree in degrees:
             # Stage 2
             u_tmp.x.array[:] = u_n.x.array + 0.5 * dt * k1
 
-            L = -ufl.dot(w, ufl.grad(u_tmp)) * v * ufl.dx + epsilon * dt * ufl.dot(ufl.grad(u_tmp), ufl.grad(v)) * ufl.dx
+            L = -ufl.dot(w, ufl.grad(u_tmp)) * v * ufl.dx - epsilon * ufl.dot(ufl.grad(u_tmp), ufl.grad(v)) * ufl.dx
             linear_form = fem.form(L)
             b = create_vector(linear_form)
 
@@ -231,7 +231,7 @@ for degree in degrees:
             # Stage 3
             u_tmp.x.array[:] = u_n.x.array + 0.5 * dt * k2
 
-            L = -ufl.dot(w, ufl.grad(u_tmp)) * v * ufl.dx + epsilon * dt * ufl.dot(ufl.grad(u_tmp), ufl.grad(v)) * ufl.dx
+            L = -ufl.dot(w, ufl.grad(u_tmp)) * v * ufl.dx - epsilon * ufl.dot(ufl.grad(u_tmp), ufl.grad(v)) * ufl.dx
             linear_form = fem.form(L)
             b = create_vector(linear_form)
 
@@ -248,7 +248,7 @@ for degree in degrees:
             # Stage 4
             u_tmp.x.array[:] = u_n.x.array + dt * k3
 
-            L = -ufl.dot(w, ufl.grad(u_tmp)) * v * ufl.dx + epsilon * dt * ufl.dot(ufl.grad(u_tmp), ufl.grad(v)) * ufl.dx
+            L = -ufl.dot(w, ufl.grad(u_tmp)) * v * ufl.dx - epsilon * ufl.dot(ufl.grad(u_tmp), ufl.grad(v)) * ufl.dx
             linear_form = fem.form(L)
             b = create_vector(linear_form)
 
