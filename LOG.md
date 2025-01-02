@@ -13,7 +13,12 @@ For all of the above, convergence rate is to be reported for mesh sizes 1/4, 1/8
 # Progression map
 
 ## W. 51
-We have continued writing in the report, adding and commenting on the results. We have implemented higher order polynomials and checked convergence. The added results included the convergence rates of the higher order polynomials, epsilon plots and convergence tables for artificial diffusion. We have rewritten the abstract introduction to include more theory to achieve more meat on the bones of the report. Lastly, we’ve tried higher order polynomials with RK4 instead of Crank Nicholson.
+We have continued writing in the report, adding and commenting on the results. 
+We have implemented higher order polynomials and checked convergence. 
+The added results included the convergence rates of the higher order polynomials, 
+epsilon plots and convergence tables for artificial diffusion. 
+We have rewritten the abstract introduction to include more theory to achieve more meat on the bones of the report. 
+Lastly, we’ve tried higher order polynomials with RK4 instead of Crank Nicholson.
 
 ## W. 50
 This week we got the smoothness indicator to work as expected in FEniCSx, by including an activation function.

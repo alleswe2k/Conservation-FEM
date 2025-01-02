@@ -12,7 +12,7 @@ from dolfinx.io import gmshio
 from dolfinx import fem, mesh, io, plot, nls, log
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, apply_lifting, set_bc, NonlinearProblem
 from dolfinx.nls.petsc import NewtonSolver
-import os 
+import os
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
 location_fig = os.path.join(script_dir, 'Figures/GFEM') # location = './Figures'
@@ -78,7 +78,7 @@ print(uh.x.array)
 
 # Variational problem and solver
 u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
-F = ((uh-u_n)*v *ufl.dx + 
+F = ((uh-u_n)*v *ufl.dx +
      0.5*dt*ufl.dot(velocity_field(uh) + velocity_field(u_n), ufl.grad(uh))*v*ufl.dx)
     #  0.5*dt*ufl.dot(velocity_field(u_n), ufl.grad(u_n))*v*ufl.dx)
 
@@ -110,7 +110,7 @@ if PLOT:
 # Updating the solution and rhs per time step
 for i in range(num_steps):
     t += dt
-    
+
     # Solve linear problem
     n, converged = solver.solve(uh)
     assert (converged)

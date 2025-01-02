@@ -39,7 +39,7 @@ gmsh.model.occ.synchronize()
 gdim = 2
 gmsh.model.addPhysicalGroup(gdim, [membrane], 1)
 
-fraction = 32
+fraction = 16
 hmax = 1/fraction # 0.05 in example
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", hmax)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", hmax)
@@ -58,11 +58,11 @@ DG0 = fem.functionspace(domain, ("DG", 0))
 # def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
 #     return ((x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2) * 14*np.pi + ((x[0] - x0_1)**2 + (x[1] - x0_2)**2 > r0**2) * np.pi / 4
 """ Discont. IC """
-def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
-    return (x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2
-""" Cont. IC """
 # def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
-#     return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
+#     return (x[0] - x0_1)**2 + (x[1] - x0_2)**2 <= r0**2
+""" Cont. IC """
+def initial_condition(x, r0=0.25, x0_1=0.3, x0_2=0):
+    return 1/2*(1-np.tanh(((x[0]-x0_1)**2+(x[1]-x0_2)**2)/r0**2 - 1))
 
 def velocity_field(x):
     return np.array([-2*np.pi*x[1], 2*np.pi*x[0]])
